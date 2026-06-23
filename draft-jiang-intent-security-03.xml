@@ -1,0 +1,920 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rfc xmlns:xi="http://www.w3.org/2001/XInclude"
+     version="3"
+     ipr="trust200902"
+     category="info"
+     submissionType="IETF"
+     consensus="false"
+     docName="draft-jiang-intent-security-03"
+     tocInclude="true"
+     symRefs="true"
+     sortRefs="true">
+
+
+  <front>
+    <title abbrev="Intent Security">Security Considerations and Requirements for Intent-Based Requests in Agentic Systems</title>
+
+    <author initials="Y." surname="Jiang" fullname="Yuning Jiang">
+        <organization>Huawei</organization>
+        <address>
+          <email>jiangyuning2@h-partners.com</email>
+        </address>
+      </author>
+
+    <author initials="L." surname="Li" fullname="Lun Li">
+        <organization>Huawei</organization>
+        <address>
+          <email>lilun20@huawei.com</email>
+        </address>
+      </author>
+
+    <author initials="Y." surname="Song" fullname="Yurong Song">
+        <organization>Huawei</organization>
+        <address>
+          <email>songyurong1@huawei.com</email>
+        </address>
+      </author>
+
+     <author initials="F." surname="Liu" fullname="Faye Liu">
+        <organization>Huawei</organization>
+        <address>
+          <email>liufei19@huawei.com</email>
+        </address>
+      </author>
+
+    <date/>
+
+    <area>Security</area>
+    <keyword>intent</keyword>
+    <keyword>AI Agents</keyword>
+    <keyword>agentic systems</keyword>
+    <keyword>delegation</keyword>
+    <keyword>transaction context</keyword>
+    <keyword>drift</keyword>
+
+   <abstract>
+      <t>
+        Intent-based requests enable users, applications, and agents to express goals and constraints without
+        specifying step-by-step procedures. Such intents are commonly translated into executable directives
+        and propagated across multiple entities (clients, agents, authorization components, orchestration
+        functions, and execution endpoints). This multi-hop processing expands the attack surface for
+        tampering, privilege escalation, constraint bypass, and intent drift. In addition, at the point
+        where an intent enters the system, a forged or unauthorized origin may cause actions to be taken
+        without valid consent.
+      </t>
+      <t>
+        This document provides a solution-agnostic security analysis for intent-based requests across
+        agentic systems. It presents attack scenarios, a threat model, security requirements, and
+        per-scenario mitigation considerations, supported by a reference model. The document is
+        Informational: it does not define a protocol, message format, or registry, and concrete mechanisms
+        are left to companion specifications. It emphasizes origin authentication and admission control,
+        constraint validation, invocation validation, multi-hop chain-of-custody, enforcement placement
+        across hops, and policy-driven responses to drift, while remaining independent of any specific
+        deployment domain.
+      </t>
+    </abstract>
+  </front>
+
+  <middle>
+
+    <section anchor="intro" numbered="true" toc="default">
+      <name>Introduction</name>
+      <t>
+        Intent-based interaction is increasingly adopted in automation, orchestration, and agentic systems,
+        where a request expresses desired outcomes and constraints rather than explicit procedures.
+        A receiving system (or a chain of systems) translates the intent into executable directives and
+        invokes tools or services to achieve the intended outcome.
+      </t>
+      <t>
+        Multi-hop processing (client-to-agent, agent-to-agent, agent-to-tool/service) introduces security
+        risks beyond traditional single-hop APIs, including: (1) integrity and substitution attacks against
+        derived directives, (2) privilege escalation during tool/service invocation, (3) constraint bypass,
+        (4) multi-hop intent drift where constraints degrade or diverge over transformations, and
+        (5) admission-time risks where an intent of spoofed or unauthorized origin is accepted and acted
+        upon without valid consent.
+      </t>
+      <t>
+        This document does not define a new protocol. It provides a security-oriented threat analysis,
+        security requirements, attack scenarios with mitigation considerations, and a reference model to
+        support future standardization and interoperable designs. Concrete mechanisms (message formats,
+        token claims, processing rules, registries) are out of scope and are expected to be specified in
+        companion documents. The document leads with the attack scenarios; the reference model is provided
+        later as supporting structure.
+      </t>
+
+      <section anchor="scope" numbered="true" toc="default">
+        <name>Scope</name>
+        <t>
+          This document focuses on security considerations for intent-based requests in multi-hop agentic
+          systems. While examples may reference telecom or networking contexts, the analysis applies
+          broadly to any domain where intent processing spans multiple trust boundaries. It complements
+          requirements-oriented analyses of agent security such as
+          <xref target="I-D.ni-a2a-ai-agent-security-requirements"/>, focusing specifically on intent
+          origin, multi-hop directive integrity, and drift.
+        </t>
+      </section>
+    </section>
+
+    <section anchor="terminology" numbered="true" toc="default">
+      <name>Terminology and Conventions</name>
+
+      <section anchor="conventions" numbered="true" toc="default">
+        <name>Conventions</name>
+        <t>
+          The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT",
+          "RECOMMENDED", "NOT RECOMMENDED", "MAY", and "OPTIONAL" in this document are to be interpreted
+          as described in BCP 14 <xref target="RFC2119"/> <xref target="RFC8174"/> when, and only when,
+          they appear in all capitals, as shown here. This document is Informational; descriptive text
+          ("the system validates ...") is used in preference to normative keywords.
+        </t>
+      </section>
+
+      <section anchor="definitions" numbered="true" toc="default">
+        <name>Definitions</name>
+        <t>
+          This document uses the following terms:
+        </t>
+
+        <dl newline="false" spacing="normal">
+          <dt>Intent:</dt>
+          <dd>A declarative expression of desired operational goals and outcomes, without
+              specifying how to achieve or implement them. This definition is aligned with
+              intent-based networking (IBN) guidance <xref target="RFC9315"/> <xref target="RFC9316"/>
+              and its use cases <xref target="I-D.irtf-nmrg-ibn-usecases"/>.</dd>
+
+          <dt>Intent-Based System (IBS):</dt>
+          <dd>A system (or chain of systems) that receives an intent and translates, validates, and
+              orchestrates it toward fulfillment. The term parallels intent-based system decomposition
+              used in IBN <xref target="RFC9315"/> and is not specific to any deployment domain.</dd>
+
+          <dt>Intent Translation:</dt>
+          <dd>The process of transforming an intent into more concrete representations,
+              such as constraints, objectives, candidate procedures, or executable directives.</dd>
+
+          <dt>Constraint:</dt>
+          <dd>A condition that limits acceptable outcomes or actions. Constraints may include
+              invariants, policy rules, safety boundaries, and compliance requirements.</dd>
+
+          <dt>Constraint Validation:</dt>
+          <dd>Verifying whether an intent and/or its derived artifacts comply with
+              applicable constraints, invariants, policy rules, and safety boundary requirements.</dd>
+
+          <dt>Invocation:</dt>
+          <dd>A request to a tool or service intended to fulfill an intent (e.g., API call,
+              workflow step, actuation command).</dd>
+
+          <dt>Invocation Validation:</dt>
+          <dd>Determining whether an invoker holds the required privileges to invoke
+              a tool or service and whether invocation parameters satisfy the requirements
+              and constraints specified by the intent.</dd>
+
+          <dt>Observation:</dt>
+          <dd>Telemetry, events, measurements, or other signals used for monitoring and assurance.</dd>
+
+          <dt>Drift:</dt>
+          <dd>A divergence between the intent (including its constraints) and the realized
+              plan or actions over time or across multi-hop transformations. In the realized trace, such
+              a divergence may appear in two distinct shapes: (a) a constraint that is present but violated
+              by a realized action, or (b) an expected control (e.g., an authorization or consent check)
+              that is absent from the trace (a silent failure). These two shapes require different audit
+              evidence and detection logic.</dd>
+
+          <dt>Derived Directive:</dt>
+          <dd>An executable or enforceable artifact generated from an intent through translation,
+              such as an allowed rule set, capability token, or authorization grant.</dd>
+
+          <dt>Intent Originator:</dt>
+          <dd>The entity that produces an intent (e.g., a user, an application, or an agent).
+              The originator is the asserted source of the intent and is distinct from the entity
+              that merely transports or forwards it.</dd>
+
+          <dt>Admission Control:</dt>
+          <dd>The decision, taken before an intent is forwarded into or accepted by the
+              processing chain, of whether to admit the intent, based on the verified origin,
+              the originator's authorization to request the targeted service, and applicable
+              consent.</dd>
+
+          <dt>Admission Assertion:</dt>
+          <dd>An abstract artifact by which an admission point conveys its verified origin and admission
+              decision (and any associated security context) to downstream entities for re-verification.
+              Its concrete encoding is out of scope for this document.</dd>
+        </dl>
+      </section>
+
+      <section anchor="acronyms" numbered="true" toc="default">
+        <name>Acronyms</name>
+        <dl newline="false" spacing="normal">
+          <dt>IBN:</dt>
+          <dd>Intent-Based Networking</dd>
+          <dt>IBS:</dt>
+          <dd>Intent-Based System</dd>
+        </dl>
+      </section>
+    </section>
+
+    <section anchor="problem" >
+      <name>Problem Statement and Threat Model</name>
+      <t>
+        In many agentic systems, an intent is translated into executable directives (e.g., an
+        allowed rule set) that must be propagated across multiple entities and enforced at
+        execution endpoints. However, existing designs often lack end-to-end mechanisms that
+        jointly ensure: (1) the intent originates from an authenticated and authorized originator
+        and has obtained any required consent before admission, (2) directives remain within
+        authorized boundaries across transformations and propagation, (3) constraints are validated
+        before execution, (4) invocations are privilege-checked and constraint-checked at each call
+        boundary, and (5) drift is detected and handled under policy.
+      </t>
+
+
+      <section anchor="ExampleArchitecture" numbered="true" toc="default" >
+        <name>Settings and Example Architecture</name>
+        <t>
+            This document considers two structural settings. Setting A is the origination/admission
+            boundary, where intents enter the system from possibly many co-resident applications or agents
+            at an entry point such as a user-facing device; this is the locus of Scenario 1 (origin,
+            authorization, and consent) and is not inherently multi-hop. Setting B is the multi-hop
+            processing chain, where an admitted intent is translated and propagated across multiple
+            entities before execution; this is the locus of Scenario 2 (directive integrity and drift).
+            The example below illustrates Setting B; an illustration of Setting A appears in Scenario 1
+            (<xref target="scn-origin"/>).
+          </t>
+        <t>
+            The following example is illustrative and is based on a sequential multi-agent orchestration
+            pattern observed in deployed frameworks. This section presents an illustrative sequential multi-agent
+            pattern; other deployments may use parallel, handoff, group-chat, manager-worker, or
+            tool-centric architectures. The property of interest, common to such patterns, is that intent
+            is decomposed and propagated across entities and must remain preserved, verifiable, and
+            contextually appropriate as it flows through the system.
+          </t>
+
+          <figure anchor="fig-x1">
+          <name>Illustrative sequential multi-agent processing</name>
+          <artwork type="ascii-art" align="left"><![CDATA[
+                                          |intent input
+                                          v
+                                  +--------------------+
+                                  |      Agent1        |
+                                  | (e.g., Summarizer) |
+                                  +--------------------+
+                                          v
+                                  +--------------------+
+                                  |     Agent2         |
+                                  | (e.g., Translator) |
+                                  +--------------------+
+                                          v
+                                  +--------------------+
+                                  |     Agent3         |
+                                  |   (e.g., QA)       |
+                                  +--------------------+
+                                          |    Result
+                                          v       ]]></artwork> </figure>
+
+          <t>
+            <xref target="fig-x1"/> illustrates one such pattern, the sequential orchestration of the
+            Microsoft Agent Framework <xref target="MS-AF-SEQ"/>, cited here only as a concrete example
+            of a deployed framework. Agents process intents in a pipeline; by default, each agent receives
+            the conversation from the previous agent, preserving context while allowing specialized
+            processing at each stage. Characteristics relevant to the threats below include:</t>
+          <ol spacing="normal" type="1">
+          <li>Agent Pipeline: agents are arranged in a predefined sequence where output from one agent becomes input for the next.</li>
+          <li>Shared Context: by default, each agent consumes the previous agent's full conversation, so context is preserved across the pipeline; the framework also allows agents to be configured to consume only the previous agent's response messages, which truncates earlier context.</li>
+          <li>Human-in-the-Loop: optional approval points for sensitive operations (e.g., tools marked as approval-required).</li>
+          <li>Mixed Executors: the ability to combine LLM-based agents with custom code executors.</li>
+          </ol>
+
+          <t>The original intent can be preserved through the shared conversation history, with each agent
+          adding specialized processing while maintaining contextual continuity. However, under certain
+          threats, the intent may change, potentially introducing security risks. The next section
+          describes these threats.</t>
+          </section>
+
+      <section anchor="threats" numbered="true" toc="default">
+        <name>Threats</name>
+
+        <t>
+          With reference to the illustrative pattern in <xref target="ExampleArchitecture"/>, the
+          following representative threats are considered. T1-T5 arise during multi-hop intent processing,
+          while T6-T7 arise at the intent origination/admission boundary, i.e., where an intent enters the
+          system:
+        </t>
+
+        <dl newline="false" spacing="normal">
+          <dt>T1 (Directive Tampering/Substitution):</dt> <dd>A malicious or compromised intermediary agent (a node that terminates any
+          hop-by-hop secure channel, not merely an on-path observer) modifies conversation history or derived
+          directives between pipeline stages, altering budget constraints or action parameters while maintaining superficial coherence.</dd>
+
+          <dt>T2 (Unauthorized Invocation / Privilege Escalation):</dt> <dd>An agent abuses mixed-executor capabilities by smuggling
+          unauthorized commands through parameter injection, bypassing the intended privilege boundary because custom code executors
+          run arbitrary code without an enforced access-control layer.</dd>
+
+          <dt>T3 (Constraint Bypass):</dt> <dd>Security constraints degrade across pipeline stages due to context truncation or
+          improper inheritance, violating the shared-context integrity assumption.</dd>
+
+          <dt>T4 (Multi-Hop Semantic Drift):</dt> <dd>Gradual semantic deviation occurs as agents reinterpret ambiguous instructions
+          across hops, causing final actions to diverge from original intent boundaries despite syntactically intact messages.</dd>
+
+          <dt>T5 (Monitoring Evasion / False Observations):</dt> <dd>Attackers evade detection by suppressing, forging, or selectively presenting
+              observations used for assurance and drift detection.</dd>
+
+          <dt>T6 (Origin Spoofing / Forged Provenance):</dt> <dd>A co-resident or upstream malicious application or agent fabricates an
+              intent artifact that appears to originate from the user or a legitimate originator, so that downstream entities accept and
+              act on an intent that the claimed originator never authorized.</dd>
+
+          <dt>T7 (Unauthorized or Non-Consensual Origination):</dt> <dd>An originator that is not entitled to request the targeted
+              service, or that is operating in a disallowed execution context (e.g., unattended background execution), issues a high-impact
+              intent without valid user consent; the system admits it because it does not gate on the originator's eligibility, execution
+              context, or explicit consent.</dd>
+        </dl>
+          <t>NOTE1: By default, the example framework does not provide cryptographic binding between pipeline stages, so agents cannot be assumed to be mutually trustworthy. The degree of such binding may vary across implementations. In particular, T1 is a node-level threat: transport security (e.g., a hop-by-hop secure channel) protects the link between two entities but not against a malicious or compromised intermediary that terminates the channel.</t>
+          <t>NOTE2: Human approval may be agent-triggered rather than enforced by the receiver, creating bypass opportunities.</t>
+      </section>
+
+      <section anchor="requirements" numbered="true" toc="default">
+        <name>Requirements</name>
+        <t>
+          Based on the threats above, this document identifies the following security requirements,
+          grouped by where in the intent lifecycle they apply. The grouping distinguishes controls that
+          act before an intent enters the system (admission-time) from those that act during multi-hop
+          processing and at execution. Requirement numbering (R1-R9) is retained from prior revisions and
+          is not sequential within groups.
+        </t>
+
+
+        <t>Transformation and propagation requirements:</t>
+        <dl newline="false" spacing="normal">
+          <dt>R1 (Provenance and Authorization Boundary Binding):</dt> <dd>The system provides a verifiable binding between the intent, derived directives,
+              and the applicable authorization boundary, such that unauthorized expansion can be
+              detected or prevented.</dd>
+
+          <dt>R2 (Chain-of-Custody for Derived Directives):</dt> <dd>The system protects derived directives against tampering and substitution
+              across multi-hop propagation.</dd>
+
+          <dt>R3 (Constraint Validation):</dt> <dd>The system validates the intent and/or derived artifacts against applicable
+              constraints, invariants, policy rules, and safety boundaries before accepting or
+              executing actions.</dd>
+        </dl>
+
+        <t>Invocation-time requirements:</t>
+        <dl newline="false" spacing="normal">
+          <dt>R4 (Invocation Validation):</dt> <dd>The system validates that an invoker holds the required privileges to invoke
+              a tool/service and that invocation parameters satisfy intent constraints prior to
+              and/or at invocation time.</dd>
+
+          <dt>R5 (Non-Bypass Enforcement):</dt> <dd>The execution endpoint enforces constraints and authorization boundaries such
+              that direct/side-path invocation cannot bypass required checks.</dd>
+        </dl>
+
+        <t>Assurance requirements:</t>
+        <dl newline="false" spacing="normal">
+          <dt>R6 (Observability and Auditability):</dt> <dd>The system provides sufficient observations and audit evidence to support
+              compliance assessment, drift detection, and incident investigation. The audit evidence is
+              able to express both shapes of divergence: a constraint present but violated, and an
+              expected control absent from the trace. Observations benefit from a shared, interoperable
+              schema so that audit evidence remains portable across multi-hop, multi-vendor chains rather
+              than siloed per intermediary; emerging generative-AI observability conventions are one
+              example of such a schema (e.g., the OpenTelemetry GenAI semantic conventions
+              <xref target="OTEL-GENAI"/>). This document does not mandate or endorse a specific
+              observation format.</dd>
+
+          <dt>R7 (Policy-Driven Drift Response):</dt> <dd>Upon drift detection or constraint violation, the system supports policy-driven
+              responses (e.g., deny, degrade, re-confirm, re-negotiate, fallback). A violated constraint
+              and an absent expected control may map to different responses.</dd>
+        </dl>
+
+        <t>Admission-time requirements:</t>
+        <dl newline="false" spacing="normal">
+          <dt>R8 (Origin Authentication):</dt> <dd>The system provides a verifiable binding between an intent artifact and the
+              identity of its actual originator, such that a forged or spoofed origin can be detected before the intent is admitted
+              or forwarded.</dd>
+
+          <dt>R9 (Originator Authorization and Consent-Gated Admission):</dt> <dd>Before admitting or forwarding an intent, the system
+              determines whether the originator is permitted to request the targeted service, based on risk-relevant originator
+              attributes and applicable permission policy. For high-impact or irreversible actions, the system additionally obtains
+              and verifies explicit user consent. Intents from unauthorized originators, from originators in a disallowed execution
+              context, or lacking required consent are rejected or escalated.</dd>
+        </dl>
+
+      </section>
+    </section>
+
+    <section anchor="scenarios" numbered="true" toc="default">
+      <name>Security Scenarios and Mitigation Considerations</name>
+      <t>
+        This section describes representative security scenarios and abstract mitigation considerations.
+        Each scenario uses a consistent template (Setting, Actors, Assets, Attack Sketch, Impact,
+        Relevant Requirements) followed by mitigation considerations. The considerations indicate the
+        class of control point where a problem may be addressed; they do not define concrete mechanisms,
+        message formats, or processing rules, which are left to companion documents.
+        <xref target="placement"/> first establishes a common enforcement-placement model that both
+        scenarios rely on.
+      </t>
+
+      <section anchor="placement" numbered="true" toc="default">
+        <name>Placement of Checks</name>
+        <t>
+          A recurring, scenario-agnostic design question is where, along the path from origination to
+          execution, a given check is performed. This applies both to admission checks (Scenario 1) and to
+          directive-integrity checks (Scenario 2). Three placements are possible:
+        </t>
+        <dl newline="true" spacing="normal">
+          <dt>Endpoint-only:</dt>
+          <dd>Only the final execution endpoint validates. This is simple, but it cannot detect
+              tampering unless the original binding survives intact to the endpoint, it fails if a
+              side path bypasses the endpoint's gate, and drift accumulates without early signal.</dd>
+          <dt>Earliest-point / per-hop:</dt>
+          <dd>The originating or each intermediary point validates. This enables early detection and
+              local enforcement, but a malicious hop will not honestly validate itself, every hop is
+              exposed to the intent, and each hop must understand the relevant semantics.</dd>
+          <dt>Combined (hybrid):</dt>
+          <dd>A property is captured or bound at the earliest point where it is verifiable, carried
+              end-to-end so it survives relays, re-verified at trust-boundary crossings for early
+              detection, and re-verified at the execution endpoint as the authoritative, non-bypassable
+              gate (R5). Intermediaries are not trusted; intermediate checks are defense-in-depth rather
+              than the sole line of defense.</dd>
+        </dl>
+        <t>
+          A consequence is that integrity cannot rely on transport security alone: an intermediary that
+          re-terminates a transport-layer secure channel (e.g., a relay or proxy) breaks transport-layer
+          evidence, so binding is applied at the intent/directive layer such that it passes through such
+          intermediaries opaquely.
+        </t>
+        <t>
+          In practice, the Invocation Gate, Constraint Validator, and Admission Control functions may be
+          realized by an AI/agent gateway, a tool gateway, or an on-device admission point. Such gateways
+          are natural policy enforcement points, but a single gateway can be bypassed by side paths (e.g.,
+          directly reachable tool servers), which is why the endpoint also enforces (R5).
+        </t>
+      </section>
+
+      <section anchor="scn-origin" numbered="true" toc="default">
+        <name>Scenario 1: Spoofed Origin and Non-Consensual Intent Origination</name>
+ 
+        <dl newline="true" spacing="normal">
+          <dt>Setting:</dt>
+          <dd>A user-facing device (e.g., a terminal) hosts multiple applications and agents. Any of them
+              can express intents that are submitted to a local Intent Client and forwarded to a remote
+              Intent-Based System (IBS) that accepts intent artifacts and may trigger high-impact services
+              or actions. The remote receiver acts on whichever intents it admits.</dd>
+ 
+          <dt>Actors:</dt>
+          <dd>Intent Originator (the user or a legitimate originator), a legitimate local agent, a
+              malicious co-resident application/agent, the Intent Client, and the remote IBS /
+              Tool/Service Provider.</dd>
+ 
+          <dt>Assets:</dt>
+          <dd>Originator identity and account/identity bindings, user consent, the permission policy that
+              determines which originators may request which services, billing/spending limits, and safety
+              constraints.</dd>
+ 
+          <dt>Attack Sketch:</dt>
+          <dd>
+            <ol spacing="normal" type="1">
+              <li>The malicious application fabricates an intent artifact that appears to originate from
+                  the user or a legitimate agent (spoofed provenance); or an originator that is not
+                  entitled to the targeted service, or is running unattended in the background, issues a
+                  high-impact intent.</li>
+              <li>The Intent Client / IBS forwards the intent, and the remote receiver executes
+                  high-impact actions (purchases, data disclosure, account or state changes) without
+                  verifying the actual originator, the originator's eligibility for the requested service,
+                  the originator's execution context, or valid user consent.</li>
+            </ol>
+          </dd>
+ 
+          <dt>Impact:</dt>
+          <dd>Unauthorized actions, fraud, privacy leakage, billing abuse, and irreversible side effects.</dd>
+ 
+          <dt>Relevant Requirements:</dt>
+          <dd>R8 (Origin Authentication), R9 (Originator Authorization and Consent-Gated Admission),
+              R3 (Constraint Validation), R6 (Observability and Auditability).</dd>
+        </dl>
+ 
+        <t>
+          <xref target="fig-scn1"/> illustrates the attack: a spoofed or unauthorized origin (marked X)
+          among co-resident applications on a user-facing device, whose intent is forwarded without
+          origin or consent verification and is acted upon at the execution endpoint. The controls that
+          address this attack are discussed in <xref target="mit-origin"/>.
+        </t>
+ 
+        <figure anchor="fig-scn1">
+          <name>Scenario 1: spoofed/unauthorized origin attack (X)</name>
+          <artwork type="ascii-art" align="left"><![CDATA[
+   +------------------------------------------+
+   |  user-facing device                      |
+   |                                          |
+   |   [ legit app ]     [ malicious app (X) ]|
+   |          \             /                 |
+   |           v           v                  |
+   |       +-------------------+              |
+   |       |   Intent Client   |              |
+   |       +---------+---------+              |
+   +-----------------|------------------------+
+                     |  intent forwarded with no
+                     |  origin / consent verification
+                     v
+               [ relay / network ]
+                     |
+                     v
+           +-----------------------+
+           |  Execution Endpoint   |---> high-impact action on a
+           +-----------------------+     spoofed / unauthorized intent
+ 
+   (X) = spoofed or unauthorized origin
+]]></artwork>
+        </figure>
+ 
+        <section anchor="mit-origin" numbered="true" toc="default">
+          <name>Mitigation Considerations</name>
+          <t>
+            Following<xref target="placement"/>, origin and consent are best evaluated at the earliest admission
+            point, because the relevant signals (which application or agent originated the intent, its
+            execution context, whether the user is present and consenting) are typically only verifiable
+            there; once the intent crosses into the network or a relay, these signals cannot be
+            reconstructed. The admission decision can then be conveyed in an Admission Assertion that the
+            execution endpoint re-verifies before acting (non-bypass, R5).
+          </t>
+          <t>
+            Admission decisions draw on risk-relevant originator attributes, such as originator identifier,
+            originator class, execution context, attested application/workload state, or locally
+            maintained risk signals, subject to privacy policy. Execution context or user-presence state,
+            where available, such as foreground interaction, unattended execution, delegated background
+            execution, or scheduled automation, can inform the decision. The decision is evaluated against
+            a permission policy expressing which originators may request which services. For high-impact
+            or irreversible actions, explicit user consent is obtained and verified.
+          </t>
+          <t>
+            A concrete encoding of an Admission Assertion (claims, format) and the associated processing
+            rules are out of scope for this document and are expected to be specified in a companion
+            mechanism document. Candidate building blocks include token formats such as
+            <xref target="I-D.goswami-agentic-jwt"/> and the agent-to-agent OAuth profile
+            <xref target="I-D.liu-oauth-a2a-profile"/>.
+          </t>
+        </section>
+      </section>
+ 
+      <section anchor="scn-tamper" numbered="true" toc="default">
+        <name>Scenario 2: Directive Tampering and Authorization Boundary Expansion</name>
+ 
+        <dl newline="true" spacing="normal">
+          <dt>Setting:</dt>
+          <dd>An IBS translates an intent into derived directives (e.g., allowed rules) that traverse
+              multiple intermediaries before reaching an execution endpoint.</dd>
+ 
+          <dt>Actors:</dt>
+          <dd>Intent Originator, Intent Client, IBS, one or more intermediaries (agents/clients),
+              Tool/Service Provider.</dd>
+ 
+          <dt>Assets:</dt>
+          <dd>Authorization boundary, constraints/invariants, protected resources, audit evidence.</dd>
+ 
+          <dt>Attack Sketch:</dt>
+          <dd>
+            <ol spacing="normal" type="1">
+              <li>A malicious or compromised intermediary node modifies derived directives to add operations or widen resource scope.</li>
+              <li>The modified directives are forwarded to the execution endpoint without effective detection.</li>
+              <li>The endpoint performs out-of-bound operations (e.g., modifying account state,
+                  accessing other parties' data, disabling safety rules).</li>
+            </ol>
+          </dd>
+ 
+          <dt>Impact:</dt>
+          <dd>Privilege escalation, policy bypass, unauthorized side effects, compliance violations.</dd>
+ 
+          <dt>Relevant Requirements:</dt>
+          <dd>R1 (Provenance and Authorization Boundary Binding), R2 (Chain-of-Custody for Derived
+              Directives), R3 (Constraint Validation), R5 (Non-Bypass Enforcement), R6 (Observability
+              and Auditability).</dd>
+        </dl>
+ 
+        <t>
+          <xref target="fig-scn2"/> illustrates the attack: a malicious or compromised intermediary node
+          tampers with or widens the directive (marked X), and the change is not detected before the
+          execution endpoint performs an out-of-bound operation. The controls that address this attack
+          are discussed in <xref target="mit-tamper"/>.
+        </t>
+ 
+        <figure anchor="fig-scn2">
+          <name>Scenario 2: directive tampering attack (X)</name>
+          <artwork type="ascii-art" align="left"><![CDATA[
+ intent
+   |
+   v
++--------+      +----------+      +----------+      +------------+
+|  IBS   |----->| inter-   |--X-->| inter-   |----->| Execution  |
+|        |      | mediary  |      | mediary  |      | Endpoint   |
++--------+      +----------+      +----------+      +-----+------+
+                                                         |
+  X = malicious / compromised node tampers with or       v
+      widens the directive; the change is not        out-of-bound
+      detected downstream.                            operation
+]]></artwork>
+        </figure>
+ 
+        <section anchor="mit-tamper" numbered="true" toc="default">
+          <name>Mitigation Considerations</name>
+          <t>
+            Because transport security protects the link but not a malicious intermediary node (T1),
+            derived directives are treated as security-relevant artifacts whose integrity and
+            authorization-boundary binding are protected across hops, independently of any hop-by-hop
+            secure channel. At the architectural level, and following the hybrid placement of
+            <xref target="placement"/>, the relevant control points are:
+          </t>
+          <dl newline="false" spacing="normal">
+            <dt>Binding and custody (R1, R2):</dt>
+            <dd>Derived directives are bound to the intent context and authorization boundary so that
+                unauthorized expansion or substitution is detectable or preventable across hops, with the
+                binding surviving relays end-to-end.</dd>
+            <dt>Per-boundary verification:</dt>
+            <dd>At each trust-boundary crossing, a transforming hop re-validates and may only attenuate
+                (never widen) the authorization boundary before re-binding.</dd>
+            <dt>Endpoint re-validation (R3, R5):</dt>
+            <dd>The execution endpoint re-verifies the binding and re-validates the directives against
+                local constraints as the authoritative, non-bypassable gate, providing defense-in-depth
+                even if upstream validation was bypassed or compromised.</dd>
+            <dt>Audit evidence (R6):</dt>
+            <dd>The system produces evidence linking execution decisions to validated directives and
+                constraints.</dd>
+          </dl>
+          <t>
+            This addresses T1 (Directive Tampering/Substitution) and T3 (Constraint Bypass). A concrete
+            encoding for the binding and custody evidence (e.g., specific token formats or attenuation
+            mechanisms) is out of scope for this document. Candidate building blocks for carrying
+            authorization context and chain-of-custody across hops include transaction tokens
+            <xref target="I-D.ietf-oauth-transaction-tokens"/> and their agent profile
+            <xref target="I-D.oauth-transaction-tokens-for-agents"/>.
+          </t>
+          <t>
+            The semantic fidelity of an intent degrades along the transformation pipeline (natural-language
+            intent, structured intent, constraints/objectives, derived directives, invocation parameters).
+            Once an intent is reduced to directives, the original meaning may no longer be recoverable from
+            the directive alone. Verifying that a concrete action still falls within the original intent
+            therefore requires a representation of the original intent's constraint envelope to be carried
+            alongside the directives to the point of check. Hops may then be treated by role:
+          </t>
+          <table anchor="tab-hops" align="center">
+            <name>Per-Hop Roles in a Multi-Hop Chain</name>
+            <thead>
+              <tr>
+                <th align="left">Hop role</th>
+                <th align="left">Action on the intent/directive</th>
+                <th align="left">Semantic-consistency check</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td align="left">Relay-only (proxy, API relay)</td>
+                <td align="left">Verifies binding/integrity and forwards; is not trusted to preserve intent, so binding is end-to-end.</td>
+                <td align="left">None (does not transform).</td>
+              </tr>
+              <tr>
+                <td align="left">Transforming hop (re-plans/rewrites)</td>
+                <td align="left">Re-validates against constraints; may only attenuate (never widen) the authorization boundary; re-binds with chained custody.</td>
+                <td align="left">Checks the transformed result against the carried intent envelope.</td>
+              </tr>
+              <tr>
+                <td align="left">Execution endpoint (Invocation Gate)</td>
+                <td align="left">Re-verifies binding, re-validates local constraints, enforces non-bypass.</td>
+                <td align="left">Mandatory: checks the concrete invocation against the carried intent envelope.</td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
+      </section>
+ 
+
+      <section anchor="mapping" numbered="true" toc="default">
+        <name>Scenario-to-Requirement Mapping</name>
+        <t>
+          <xref target="tab-map"/> summarizes the primary mappings between the scenarios and security
+          requirements. These mappings are non-exhaustive; additional requirements may apply depending on
+          deployment context.
+        </t>
+
+        <table anchor="tab-map" align="center">
+          <name>Scenario to Requirement Mapping</name>
+          <thead>
+            <tr>
+              <th align="left">Scenario</th>
+              <th align="left">Primary Threats</th>
+              <th align="left">Key Requirements</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td align="left">1 (Spoofed/Non-Consensual Origin)</td>
+              <td align="left">T6, T7</td>
+              <td align="left">R8, R9, R3, R6</td>
+            </tr>
+            <tr>
+              <td align="left">2 (Directive Tampering)</td>
+              <td align="left">T1, T3</td>
+              <td align="left">R1, R2, R3, R5, R6</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+    </section>
+
+    <section anchor="refmodel" numbered="true" toc="default">
+      <name>Reference Model</name>
+      <t>
+        This section provides a technology-neutral reference model that underpins the scenarios above.
+        It is aligned with intent-based system decomposition commonly used in IBN guidance
+        <xref target="RFC9315"/>, while remaining applicable to non-networking domains. The model is
+        logical: a deployment may collapse functions into fewer components or distribute them across
+        multiple agents and services, and multi-hop chains are formed by composing instances of the
+        model (an intermediary acts as a provider to its predecessor and as a client to its successor).
+      </t>
+
+      <figure anchor="fig-refmodel">
+        <name>Reference Model for Multi-Hop Intent Processing</name>
+        <artwork type="ascii-art" align="left"><![CDATA[
++------------+             +-----------------------------+
+| User Space |  Intent     | IBS (Intent-Based System)   |
+|            |  Artifact   | Intent Processing Function   |
+|  Intent    |------------>|                             |
+| Originator |             | +-----------+ +-----------+ |
+|            |  Admission  | |  Intent   | | Constraint| |
+|  Intent    |  Assertion  | |Transformer| | Validator |-+-> Policy/
+|  Client    |------------>| +-----------+ +-----------+ |  Constraint
++------------+             |                             |  Authority
+                           | +-----------+               |
+                           | |Invocation |               |
+                           | |   Gate    |---------------+-> Tool/
+                           | +-----------+               |  Service
+                           +-----------------------------+  Provider
+                                  ^           |
+                                  |  Observe  |
+                                  |           v
+                           +-----------------------------+
+                           |   Observer (Monitoring)     |
+                           +-----------------------------+
+]]></artwork>
+      </figure>
+
+      <t>
+        Two distinct flows cross the User Space / IBS boundary: the Intent Artifact (the intent itself)
+        and the Admission Assertion (the verified origin and admission decision, see
+        <xref target="scn-origin"/>).
+      </t>
+
+      <section anchor="entities" numbered="true" toc="default">
+        <name>Reference Model Entities</name>
+        <dl newline="false" spacing="normal">
+          <dt>Intent Originator:</dt> <dd>The party whose goals and constraints are to be satisfied (e.g., human user,
+              application owner, operator, or delegated principal).</dd>
+
+          <dt>Intent Client:</dt> <dd>The component that submits intents to an IBS and may carry contextual signals.
+              The Intent Client (or an equivalent admission point) may also enforce origin authentication and
+              originator-level admission control before an intent is forwarded (see R8 and R9).</dd>
+
+          <dt>Intent Processing Function:</dt> <dd>A logical function that performs translation, validation, and orchestration
+              for intent fulfillment. This function encompasses the Intent Transformer,
+              Constraint Validator, and Invocation Gate.</dd>
+
+          <dt>Intent Transformer:</dt> <dd>A function that transforms intent representations (e.g., natural language to
+              structured intent, structured intent to constraints/objectives, objectives to
+              derived directives).</dd>
+
+          <dt>Constraint Validator:</dt> <dd>A function that enforces R3 by validating intents and derived artifacts against
+              constraints, invariants, policy rules, and safety boundaries.</dd>
+
+          <dt>Invocation Gate:</dt> <dd>A function that enforces R4 and R5 by privilege-checking and constraint-checking
+              each tool/service invocation and preventing bypass of required checks.</dd>
+
+          <dt>Policy/Constraint Authority:</dt> <dd>A logical source of constraints and policy boundaries (e.g., organizational policy,
+              compliance rules, safety invariants, subscription/contract limits). It also supplies the
+              permission policy that determines which originators may request which services (R9).</dd>
+
+          <dt>Tool/Service Provider:</dt> <dd>A system that executes actions (APIs, workflows, actuators, management functions,
+              data services).</dd>
+
+          <dt>Observer (Monitoring Function):</dt> <dd>A function that collects observations (telemetry, events, measurements)
+              used for assurance, compliance assessment, and drift detection (R6 and R7).</dd>
+        </dl>
+      </section>
+
+      <section anchor="overview" numbered="true" toc="default">
+        <name>Operational Overview</name>
+        <t>
+          The following informative lifecycle contextualizes admission control, constraint validation,
+          invocation validation, observation, and drift handling.
+        </t>
+
+        <ol spacing="normal" type="1">
+          <li>The Intent Originator expresses an intent via the Intent Client.</li>
+          <li>The Intent Client (or an equivalent admission point) authenticates the origin and applies
+              admission control (R8, R9) before forwarding.</li>
+          <li>The Intent Client submits an admitted intent artifact to the IBS.</li>
+          <li>The IBS performs intent translation (Intent Transformer) to derive constraints,
+              objectives, and candidate directives.</li>
+          <li>The IBS performs constraint validation (R3) in consultation with the
+              Policy/Constraint Authority.</li>
+          <li>Prior to each invocation, the IBS performs invocation validation (R4), including
+              privilege checks and parameter/constraint checks.</li>
+          <li>The Tool/Service Provider executes the invocation and returns results; side effects
+              may be irreversible.</li>
+          <li>The Observer produces observations used by the IBS for assurance and drift detection (R6).</li>
+          <li>If drift or violations are detected, the IBS applies a policy-driven response (R7),
+              such as deny, degrade, re-confirm, re-negotiate, or fallback.</li>
+        </ol>
+      </section>
+    </section>
+
+    <section anchor="seccons" numbered="true" toc="default">
+      <name>Security and Privacy Considerations</name>
+      <t>
+        Beyond the scenario-specific considerations, the following general principles apply to
+        intent-based systems:
+      </t>
+
+      <ul spacing="normal">
+        <li>Trust Boundary Awareness: systems explicitly identify trust boundaries and
+            apply appropriate security controls at each boundary crossing.</li>
+
+        <li>Defense in Depth: validation occurs at multiple layers (admission, translation, propagation,
+            invocation, execution) to provide resilience against bypass or compromise of individual
+            layers.</li>
+
+        <li>Least Privilege: derived directives and invocations are scoped to the minimum
+            privileges necessary for intent fulfillment.</li>
+
+        <li>Fail-Safe Defaults: when validation fails or drift is detected, systems default
+            to denying actions rather than permitting potentially unsafe operations.</li>
+
+        <li>Auditability: all security-relevant decisions and events are logged with
+            sufficient context to support post-incident investigation and compliance assessment.</li>
+
+        <li>Privacy of Admission Signals: admission assertions should avoid exposing raw local state or
+            behavioral history to downstream entities; coarse-grained decisions or policy references are
+            preferred over detailed originator profiles. Risk-relevant attributes are minimized and
+            subject to privacy policy.</li>
+      </ul>
+    </section>
+
+    <section anchor="iana" numbered="true" toc="default">
+      <name>IANA Considerations</name>
+      <t>
+        This document has no IANA actions. It does not define any message format, claim, or registry;
+        concrete admission and binding mechanisms, and any associated registrations, are out of scope and
+        would be specified in companion documents.
+      </t>
+    </section>
+
+  </middle>
+
+  <back>
+
+
+  <references anchor="refs-normative">
+    <name>Normative References</name>
+    <xi:include href="https://bib.ietf.org/public/rfc/bibxml/reference.RFC.2119.xml"/>
+    <xi:include href="https://bib.ietf.org/public/rfc/bibxml/reference.RFC.8174.xml"/>
+  </references>
+
+  <references anchor="refs-informative">
+    <name>Informative References</name>
+    <xi:include href="https://bib.ietf.org/public/rfc/bibxml/reference.RFC.9315.xml"/>
+    <xi:include href="https://bib.ietf.org/public/rfc/bibxml/reference.RFC.9316.xml"/>
+    <xi:include href="https://bib.ietf.org/public/rfc/bibxml3/reference.I-D.irtf-nmrg-ibn-usecases.xml"/>
+    <xi:include href="https://bib.ietf.org/public/rfc/bibxml3/reference.I-D.ietf-oauth-transaction-tokens.xml"/>
+    <xi:include href="https://bib.ietf.org/public/rfc/bibxml3/reference.I-D.oauth-transaction-tokens-for-agents.xml"/>
+    <xi:include href="https://bib.ietf.org/public/rfc/bibxml3/reference.I-D.liu-oauth-a2a-profile.xml"/>
+    <xi:include href="https://bib.ietf.org/public/rfc/bibxml3/reference.I-D.goswami-agentic-jwt.xml"/>
+    <xi:include href="https://bib.ietf.org/public/rfc/bibxml3/reference.I-D.ni-a2a-ai-agent-security-requirements.xml"/>
+
+    <reference anchor="MS-AF-SEQ" target="https://github.com/microsoft/agent-framework">
+      <front>
+        <title>Sequential Orchestration, Microsoft Agent Framework Workflows</title>
+        <author>
+          <organization>Microsoft</organization>
+        </author>
+        <date year="2026"/>
+      </front>
+      <refcontent>Microsoft, cited as an illustrative example only</refcontent>
+    </reference>
+
+    <reference anchor="OTEL-GENAI" target="https://github.com/open-telemetry/semantic-conventions-genai">
+      <front>
+        <title>Semantic Conventions for Generative AI (GenAI)</title>
+        <author>
+          <organization>OpenTelemetry Authors</organization>
+        </author>
+        <date year="2026"/>
+      </front>
+      <refcontent>OpenTelemetry, work in progress (experimental)</refcontent>
+    </reference>
+  </references>
+
+  <section anchor="acknowledgments" numbered="false">
+    <name>Acknowledgments</name>
+    <t>
+      The authors thank Adam Lin (Agent Threat Rules) for implementer feedback on the observability
+      and drift-detection requirements (<xref target="requirements"/>), in particular the observations
+      that audit evidence benefits from a shared, interoperable trace schema and that an absent expected
+      control is a detection shape distinct from a violated constraint.
+    </t>
+  </section>
+
+</back>
+
+</rfc>
