@@ -1,0 +1,2351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta content="Common,Latin" name="scripts">
+<meta content="initial-scale=1.0" name="viewport">
+<title>Security Considerations and Requirements for Intent-Based Requests in Agentic Systems</title>
+<meta content="Yuning Jiang" name="author">
+<meta content="Lun Li" name="author">
+<meta content="Yurong Song" name="author">
+<meta content="Faye Liu" name="author">
+<meta content="
+       
+        Intent-based requests enable users, applications, and agents to express goals and constraints without
+        specifying step-by-step procedures. Such intents are commonly translated into executable directives
+        and propagated across multiple entities (clients, agents, authorization components, orchestration
+        functions, and execution endpoints). This multi-hop processing expands the attack surface for
+        tampering, privilege escalation, constraint bypass, and intent drift. In addition, at the point
+        where an intent enters the system, a forged or unauthorized origin may cause actions to be taken
+        without valid consent.
+       
+       
+        This document provides a solution-agnostic security analysis for intent-based requests across
+        agentic systems. It presents attack scenarios, a threat model, security requirements, and
+        per-scenario mitigation considerations, supported by a reference model. The document is
+        Informational: it does not define a protocol, message format, or registry, and concrete mechanisms
+        are left to companion specifications. It emphasizes origin authentication and admission control,
+        constraint validation, invocation validation, multi-hop chain-of-custody, enforcement placement
+        across hops, and policy-driven responses to drift, while remaining independent of any specific
+        deployment domain.
+       
+    " name="description">
+<meta content="xml2rfc 3.34.0" name="generator">
+<meta content="intent" name="keyword">
+<meta content="AI Agents" name="keyword">
+<meta content="agentic systems" name="keyword">
+<meta content="delegation" name="keyword">
+<meta content="transaction context" name="keyword">
+<meta content="drift" name="keyword">
+<meta content="draft-jiang-intent-security-latest" name="ietf.draft">
+<!-- Generator version information:
+  xml2rfc 3.34.0
+    Python 3.14.5
+    ConfigArgParse 1.7.5
+    google-i18n-address 3.1.1
+    intervaltree 3.2.1
+    Jinja2 3.1.6
+    lxml 6.1.1
+    natsort 8.4.0
+    platformdirs 4.10.0
+    pycountry 24.6.1
+    PyYAML 6.0.3
+    requests 2.33.1
+    wcwidth 0.8.1
+-->
+<link href="draft-jiang-intent-security.xml" rel="alternate" type="application/rfc+xml">
+<link href="#copyright" rel="license">
+<style type="text/css">@font-face {
+  font-family: 'Lora';
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: local('Lora Italic'), local('Lora-Italic'), url('https://martinthomson.github.io/rfc-css/fonts/lora-italic-cyrillic-ext.woff2') format('woff2');
+  unicode-range: U+0460-052F, U+1C80-1C88, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F;
+}
+@font-face {
+  font-family: 'Lora';
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: local('Lora Italic'), local('Lora-Italic'), url('https://martinthomson.github.io/rfc-css/fonts/lora-italic-cyrillic-ext.woff2') format('woff2');
+  unicode-range: U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+@font-face {
+  font-family: 'Lora';
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: local('Lora Italic'), local('Lora-Italic'), url('https://martinthomson.github.io/rfc-css/fonts/lora-italic-vietnamese.woff2') format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+1EA0-1EF9, U+20AB;
+}
+@font-face {
+  font-family: 'Lora';
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: local('Lora Italic'), local('Lora-Italic'), url('https://martinthomson.github.io/rfc-css/fonts/lora-italic-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-024F, U+0259, U+1E00-1EFF, U+2020, U+20A0-20AB, U+20AD-20CF, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+@font-face {
+  font-family: 'Lora';
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: local('Lora Italic'), local('Lora-Italic'), url('https://martinthomson.github.io/rfc-css/fonts/lora-italic-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Lora';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: local('Lora Regular'), local('Lora-Regular'), url('https://martinthomson.github.io/rfc-css/fonts/lora-regular-cyrillic-ext.woff2') format('woff2');
+  unicode-range: U+0460-052F, U+1C80-1C88, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F;
+}
+@font-face {
+  font-family: 'Lora';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: local('Lora Regular'), local('Lora-Regular'), url('https://martinthomson.github.io/rfc-css/fonts/lora-regular-cyrillic.woff2') format('woff2');
+  unicode-range: U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+@font-face {
+  font-family: 'Lora';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: local('Lora Regular'), local('Lora-Regular'), url('https://martinthomson.github.io/rfc-css/fonts/lora-regular-vietnamese.woff2') format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+1EA0-1EF9, U+20AB;
+}
+@font-face {
+  font-family: 'Lora';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: local('Lora Regular'), local('Lora-Regular'), url('https://martinthomson.github.io/rfc-css/fonts/lora-regular-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-024F, U+0259, U+1E00-1EFF, U+2020, U+20A0-20AB, U+20AD-20CF, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Lora';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: local('Lora Regular'), local('Lora-Regular'), url('https://martinthomson.github.io/rfc-css/fonts/lora-regular-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'Lora';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: local('Lora Bold'), local('Lora-Bold'), url('https://martinthomson.github.io/rfc-css/fonts/lora-bold-cyrillic-ext.woff2') format('woff2');
+  unicode-range: U+0460-052F, U+1C80-1C88, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F;
+}
+@font-face {
+  font-family: 'Lora';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: local('Lora Bold'), local('Lora-Bold'), url('https://martinthomson.github.io/rfc-css/fonts/lora-bold-cyrillic.woff2') format('woff2');
+  unicode-range: U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+@font-face {
+  font-family: 'Lora';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: local('Lora Bold'), local('Lora-Bold'), url('https://martinthomson.github.io/rfc-css/fonts/lora-bold-vietnamese.woff2') format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+1EA0-1EF9, U+20AB;
+}
+@font-face {
+  font-family: 'Lora';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: local('Lora Bold'), local('Lora-Bold'), url('https://martinthomson.github.io/rfc-css/fonts/lora-bold-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-024F, U+0259, U+1E00-1EFF, U+2020, U+20A0-20AB, U+20AD-20CF, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Lora';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: local('Lora Bold'), local('Lora-Bold'), url('https://martinthomson.github.io/rfc-css/fonts/lora-bold-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Lora';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: local('Lora SemiBold'), local('Lora-SemiBold'), url('https://martinthomson.github.io/rfc-css/fonts/lora-semibold-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'Oxygen Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: local('Oxygen Mono'), local('OxygenMono-Regular'), url('https://martinthomson.github.io/rfc-css/fonts/oxygenmono-regular-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Oxygen Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: local('Oxygen Mono'), local('OxygenMono-Regular'), url('https://martinthomson.github.io/rfc-css/fonts/oxygenmono-regular-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+}
+
+@font-face {
+  font-family: 'Sofia Sans Semi Condensed';
+  font-style: italic;
+  font-weight: 1 1000;
+  src: url('https://martinthomson.github.io/rfc-css/fonts/sofiasanssemicondensed-italic-cyrillic-ext.woff2') format('woff2');
+  unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F;
+}
+@font-face {
+  font-family: 'Sofia Sans Semi Condensed';
+  font-style: italic;
+  font-weight: 1 1000;
+  src: url('https://martinthomson.github.io/rfc-css/fonts/sofiasanssemicondensed-italic-cyrillic.woff2') format('woff2');
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+@font-face {
+  font-family: 'Sofia Sans Semi Condensed';
+  font-style: italic;
+  font-weight: 1 1000;
+  src: url('https://martinthomson.github.io/rfc-css/fonts/sofiasanssemicondensed-italic-greek.woff2') format('woff2');
+  unicode-range: U+0370-0377, U+037A-037F, U+0384-038A, U+038C, U+038E-03A1, U+03A3-03FF;
+}
+@font-face {
+  font-family: 'Sofia Sans Semi Condensed';
+  font-style: italic;
+  font-weight: 1 1000;
+  src: url('https://martinthomson.github.io/rfc-css/fonts/sofiasanssemicondensed-italic-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Sofia Sans Semi Condensed';
+  font-style: italic;
+  font-weight: 1 1000;
+  src: url('https://martinthomson.github.io/rfc-css/fonts/sofiasanssemicondensed-italic-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Sofia Sans Semi Condensed';
+  font-style: normal;
+  font-weight: 1 1000;
+  src: url('https://martinthomson.github.io/rfc-css/fonts/sofiasanssemicondensed-regular-cyrillic-ext.woff2') format('woff2');
+  unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F;
+}
+@font-face {
+  font-family: 'Sofia Sans Semi Condensed';
+  font-style: normal;
+  font-weight: 1 1000;
+  src: url('https://martinthomson.github.io/rfc-css/fonts/sofiasanssemicondensed-regular-cyrillic.woff2') format('woff2');
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+@font-face {
+  font-family: 'Sofia Sans Semi Condensed';
+  font-style: normal;
+  font-weight: 1 1000;
+  src: url('https://martinthomson.github.io/rfc-css/fonts/sofiasanssemicondensed-regular-greek.woff2') format('woff2');
+  unicode-range: U+0370-0377, U+037A-037F, U+0384-038A, U+038C, U+038E-03A1, U+03A3-03FF;
+}
+@font-face {
+  font-family: 'Sofia Sans Semi Condensed';
+  font-style: normal;
+  font-weight: 1 1000;
+  src: url('https://martinthomson.github.io/rfc-css/fonts/sofiasanssemicondensed-regular-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Sofia Sans Semi Condensed';
+  font-style: normal;
+  font-weight: 1 1000;
+  src: url('https://martinthomson.github.io/rfc-css/fonts/sofiasanssemicondensed-regular-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+:root {
+  color-scheme: light dark;
+  --background-color: #fff;
+  --text-color: #222;
+  --title-color: #191919;
+  --link-color: #2a6496;
+  --highlight-color: #f9f9f9;
+  --line-color: #eee;
+  --pilcrow-weak: #ddd;
+  --pilcrow-strong: #bbb;
+  --small-font-size: 14.5px;
+  --font-mono: 'Oxygen Mono', monospace;
+  --font-title: "Sofia Sans Semi Condensed", sans-serif;
+  scrollbar-color: #bbb #eee;
+}
+body {
+  max-width: 600px;
+  margin: 75px auto;
+  padding: 0 5px;
+  color: var(--text-color);
+  background-color: var(--background-color);
+  font: 16px/22px "Lora", serif;
+  scroll-behavior: smooth;
+}
+
+.ears {
+  display: none;
+}
+
+/* headings */
+section {
+  clear: both;
+}
+.section-number {
+  padding-right: 0.5em;
+}
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-title);
+  font-weight: 680;
+  margin: 0.8em 0 0.3em;
+  font-size-adjust: 0.5;
+  color: var(--title-color);
+}
+h1 {
+  &#title {
+    font-size: 32px;
+    line-height: 40px;
+    clear: both;
+    margin: 1.5em 0 0.2em;
+  }
+  &#rfcnum {
+    margin: 1.5em 0 0.2em;
+    & + h1#title {
+      margin: 0.2em 0;
+    }
+  }
+}
+
+h1, h2, h3 {
+  font-size: 22px;
+  line-height: 27px;
+}
+h4, h5, h6 {
+  font-size: 20px;
+  line-height: 24px;
+}
+
+/* general structure */
+.author {
+  padding-bottom: 0.3em;
+  vertical-align: top;
+}
+#abstract+p {
+  font-size: 18px;
+  line-height: 24px;
+  & code, & samp, & tt {
+    font-size: 16px;
+    line-height: 0;
+  }
+}
+
+p {
+  padding: 0;
+  margin: 0.5em 0;
+  text-align: left;
+}
+div {
+  margin: 0;
+}
+.alignRight {
+  margin: 1em 0;
+  &.art-text {
+    background-color: var(--highlight-color);
+    border: 1px solid var(--line-color);
+    border-radius: 3px;
+    padding: 0.5em 1em 0;
+    margin-bottom: 0.5em;
+    & pre {
+      padding: 0;
+      width: auto;
+    }
+  }
+  & > *:first-child {
+    border: none;
+    margin: 0;
+    float: right;
+    clear: both;
+  }
+  & > *:nth-child(2) {
+    clear: both;
+    display: block;
+    border: none;
+  }
+}
+svg {
+  display: block;
+  /* font-family isn't space-separated, but =~ will have to do */
+  &[font-family~="monospace" i], & [font-family~="monospace" i] {
+    font-family: var(--font-mono);
+  }
+}
+.alignCenter {
+  margin: 1em 0;
+  &.art-text {
+    background-color: var(--highlight-color);
+    border: 1px solid var(--line-color);
+    border-radius: 3px;
+    padding: 0.5em 1em 0;
+    margin-bottom: 0.5em;
+    & pre {
+      padding: 0;
+      width: auto;
+    }
+  }
+  & > *:first-child {
+    border: none;
+    /* this isn't optimal, but it's an existence proof.  PrinceXML doesn't
+       support flexbox yet.
+    */
+    display: table;
+    margin: 0 auto;
+  }
+}
+
+/* lists */
+ol, ul {
+  padding: 0;
+  margin: 0 0 0.5em 2em;
+  & :is(ol, ul) {
+    margin-left: 1em;
+  }
+}
+li {
+  margin: 0 0 0.25em 0;
+}
+ul.empty, .ulEmpty {
+  list-style-type: none;
+  & li {
+    margin-top: 0.5em;
+  }
+}
+:is(ul, ol).compact, .ulCompact, .olCompact {
+  margin: 0 0 0 2em;
+  & li {
+    margin: 0;
+    & :first-child { margin-top: 0; }
+    & :last-child { margin-bottom: 0; }
+  }
+}
+
+/* definition lists */
+dl {
+  clear: left;
+  --indent: 3ch;
+  /* --indent: attr(indent ch); not supported in any browser, but we can dream */
+  &.olPercent {
+    --indent: 5ch;
+    & > dt {
+      min-width: calc(var(--indent) - 2ch);
+      float: none;
+    }
+  }
+
+  dl > dd > & {
+    margin-top: 0.5em;
+    margin-bottom: 0;
+  }
+
+  &:not(.dlNewline) > dt {
+    float: left;
+    margin-right: 2ch;
+    min-width: 8ch;
+  }
+  & > dd {
+    margin-bottom: .8em;
+    margin-left: var(--indent) !important; /* stupid element overrides */
+    min-height: 2ex;
+  }
+}
+:is(dl.compact, .dlCompact) > dd {
+  margin-bottom: 0;
+  & > :is(:first-child, .break:first-child + *) {
+    margin-top: 0;
+  }
+  & > :is(:last-child) {
+    margin-bottom: 0;
+  }
+}
+:is(dd, span).break {
+  display: none;
+}
+
+/* links */
+a {
+  text-decoration: none;
+  &[href] {
+    color: var(--link-color);
+    &:hover { text-decoration: underline; }
+    &.selfRef {
+      color: var(--text-color);
+      &:hover {
+        text-decoration: none;
+        background-color: var(--highlight-color);
+      }
+    }
+  }
+}
+.iref + a[href].internal {
+  color: var(--text-color);
+}
+a.xref:is(.cite, .auto), :is(#status-of-memo, #copyright) a {
+  white-space: nowrap;
+}
+
+/* Figures */
+tt, code, pre {
+  background-color: var(--highlight-color);
+  font: 14px/22px var(--font-mono);
+}
+tt, code {
+  /* changing the font for inline elements leads to different ascender
+     and descender heights; as we want to retain baseline alignment,
+     remove leading to avoid altering the final height of lines
+     note: this fails if these blocks take an entire line,
+     a different solution would be great */
+  line-height: 0;
+}
+:is(h1, h2, h3, h4, h5, h6) :is(tt, code) {
+  font-size: 84%;
+}
+pre {
+  border: 1px solid var(--line-color);
+  font-size: 13.5px;
+  line-height: 16px;
+  letter-spacing: -0.2px;
+  margin: 5px;
+  padding: 5px;
+}
+img {
+  max-width: 100%;
+}
+figure {
+  margin: 0.5em 0;
+  padding: 0;
+  & blockquote {
+    margin: 0.8em 0.4em 0.4em;
+  }
+}
+figcaption, caption {
+  font-style: italic;
+  margin: 0.5em 1.5em;
+  text-align: left;
+  caption-side: bottom;
+}
+@media screen {
+  /* Auto-collapse boilerplate. */
+  :is(#status-of-memo, #copyright) {
+    & p {
+      margin: -2px 0;
+      max-height: 0;
+      transition: max-height 2s ease, margin 0.5s ease 0.5s;
+      overflow: hidden;
+    }
+    &:hover p,
+    & h2:target ~ p {
+      margin: 0.5em 0;
+      max-height: 500px;
+      overflow: auto;
+    }
+  }
+  pre, svg {
+    display: inline-block;
+    /* In the horizontal direction, sometimes people make over-sized figures.
+       Scrollbars for those is therefore necessary: auto adds them as necessary..
+       In the vertical direction, the line-height can combine with the font
+       asender/descender height to produce scrollbars: hidden avoids that. */
+    overflow: auto hidden;
+  }
+  pre {
+    max-width: 100%;
+    width: calc(100% - 22px - 1em);
+  }
+  svg {
+    max-width: calc(100% - 22px - 1em);
+  }
+  figure pre {
+    display: block;
+    width: calc(100% - 25px);
+  }
+  :is(pre, svg) + .pilcrow {
+    display: inline-block;
+    vertical-align: text-bottom;
+    padding-bottom: 8px;
+  }
+}
+
+/* aside, blockquote */
+aside, blockquote {
+  margin-left: 0;
+  padding: 0 2em;
+  font-style: italic;
+}
+blockquote {
+  margin: 1em 0;
+  border-left: 2px var(--pilcrow-strong) solid;
+}
+cite {
+  display: block;
+  text-align: right;
+  font-style: italic;
+}
+
+/* tables */
+table {
+  width: auto;
+  max-width: 100%;
+  margin: 0 0 1em;
+  border-collapse: collapse;
+  &.right { margin-left: auto; }
+  &.center { margin-left: auto; margin-right: auto; }
+  &.left { margin-right: auto; }
+  & .text-left { text-align: left; }
+  & .text-center { text-align: center; }
+  & .text-right { text-align: right; }
+  & caption {
+    margin: 0;
+    padding: 3px 0 3px 1em;
+  }
+  & p { margin: 0; }
+}
+
+thead, tbody {
+  border: 1px solid var(--line-color);
+}
+th, td {
+  text-align: left;
+  vertical-align: top;
+  padding: 5px 10px;
+}
+th {
+  background-color: var(--line-color);
+}
+:is(tr:nth-child(2n), thead+tbody > tr:nth-child(2n+1)) > td {
+  background-color: var(--background-color);
+}
+:is(tr:nth-child(2n+1), thead+tbody > tr:nth-child(2n)) > td {
+  background-color: var(--highlight-color);
+}
+
+/* pilcrow */
+a.pilcrow {
+  margin-left: 3px;
+  opacity: 0.2;
+  user-select: none;
+  &[href] {
+    color: var(--pilcrow-weak);
+    &:hover { text-decoration: none; }
+  }
+  @media not print {
+    :hover > &, &:focus {
+      opacity: 1;
+    }
+    &[href]:hover {
+      color: var(--pilcrow-strong);
+      background-color: transparent;
+    }
+  }
+  @media print {
+    display: none;
+  }
+}
+
+/* misc */
+hr {
+  border: 0;
+  border-top: 1px solid var(--line-color);
+}
+.bcp14 {
+  font-variant: small-caps;
+  font-weight: 600;
+  font-size: var(--small-font-size);
+}
+.role {
+  font-variant: all-small-caps;
+}
+sub, sup {
+  line-height: 1;
+  font-size: 80%;
+}
+
+/* info block */
+#identifiers {
+  margin: 0;
+  font-size: var(--small-font-size);
+  line-height: 18px;
+  --identifier-width: 15ch;
+  & dt {
+    width: var(--identifier-width);
+    min-width: var(--identifier-width);
+    clear: left;
+    float: left;
+    text-align: right;
+    margin-right: 1ch;
+  }
+  & dd {
+    margin: 0;
+    margin-left: calc(1em + var(--identifier-width)) !important;
+    min-width: 5em;
+  }
+  & .authors {
+    & .author {
+      display: inline-block;
+      margin-right: 1.5em;
+    }
+    & .org {
+      font-style: italic;
+    }
+  }
+}
+
+/* The prepared/rendered info at the very bottom of the page */
+.docInfo {
+  color: #999;
+  font-size: 0.9em;
+  font-style: italic;
+  margin-top: 2em;
+  & .prepared {
+    float: right;
+  }
+}
+
+/* table of contents */
+#toc {
+  padding: 0.75em 0 2em 0;
+  margin-bottom: 1em;
+
+  & nav {
+    & ul {
+      margin: 0 0.5em 0 0;
+      padding: 0;
+      list-style: none;
+    }
+    & li {
+      line-height: 1.3em;
+      margin: 2px 0;
+      padding-left: 1.2em;
+      text-indent: -1.2em;
+    }
+  }
+  & a.xref {
+    white-space: normal;
+  }
+}
+
+.references {
+  & > dt {
+    text-align: right;
+    font-weight: bold;
+    min-width: 10ch;
+    margin-right: 1.5ch;
+    &:target::before {
+      content: "⇒";
+      margin: 0 10px 0 -25px;
+    }
+  }
+  & > dd {
+    margin-left: 12ch !important;
+    overflow: visible;
+    & .refInstance {
+      margin-bottom: 0.8em;
+    }
+    & .ascii {
+      margin-bottom: 0.25em;
+    }
+  }
+}
+
+#rfc\.index\.index + ul {
+  margin-left: 0;
+}
+
+/* authors */
+address.vcard {
+  font-style: normal;
+  max-width: 20em;
+  margin: 1em auto 1em 0;
+
+  & .nameRole {
+    font-weight: 700;
+    margin-left: 0;
+  }
+  & .label {
+    margin: 0.5em 0;
+  }
+  & .type {
+    display: none;
+  }
+  & .alternative-contact {
+    margin: 0.5em 0 0.25em 0;
+  }
+  & .non-ascii {
+    margin: 0 0 0 2em;
+  }
+  & div.left {
+    text-align: left;
+  }
+  & div.right {
+    text-align: right;
+  }
+}
+
+hr.addr {
+  border-top: 1px dashed;
+  margin: 0;
+  color: #ddd;
+  max-width: calc(100% - 16px);
+}
+@media (min-width: 500px) {
+  #authors-addresses {
+    & > section {
+      column-count: 2;
+      column-gap: 20px;
+    }
+    & > section > h2 {
+      column-span: all;
+    }
+    /* hack for break-inside: avoid-column */
+    & address {
+      display: inline-block;
+      break-inside: avoid-column;
+    }
+  }
+}
+
+/* Comments */
+.rfcEditorRemove {
+  & p:first-of-type {
+    font-style: italic;
+  }
+}
+.cref {
+  background-color: rgba(249, 232, 105, 0.3);
+  padding: 2px 4px;
+}
+.crefSource {
+  font-style: italic;
+}
+
+@media screen {
+  #toc {
+    & nav {
+      font-family: var(--font-title);
+      font-weight: 360;
+      & > ul { margin-bottom: 2em; }
+      & ul {
+        margin: 0 0 0 4px;
+        & :is(p, li) {
+          margin: 2px 0;
+        }
+      }
+    }
+    & a.toplink {
+      float: right;
+    }
+  }
+}
+@media not screen {
+  #toc a.toplink {
+    display: none;
+  }
+}
+
+
+/* TOC layout for smaller screens */
+@media screen and (max-width: 929px) {
+  #toc {
+    position: fixed;
+    z-index: 2;
+    top: 0;
+    right: 0;
+    padding: 1px 0 0 0;
+    margin: 0;
+    border-bottom: 1px solid #ccc;
+    opacity: 0.6;
+    & h2 {
+      margin: 0;
+      padding: 2px 0 2px 6px;
+      padding-right: 1em;
+      font-size: 18px;
+      line-height: 24px;
+      min-width: 190px;
+      text-align: right;
+      background-color: #444;
+      color: white;
+      cursor: pointer;
+      &::before { /* css hamburger */
+        float: right;
+        position: relative;
+        width: 1em;
+        height: 1px;
+        left: -164px;
+        margin: 8px 0 0 0;
+        background: white none repeat scroll 0 0;
+        box-shadow: 0 4px 0 0 white, 0 8px 0 0 white;
+        content: "";
+      }
+    }
+    & nav {
+      display: none;
+      background-color: var(--background-color);
+      padding: 0.5em 1em 1em;
+      overflow: auto;
+      overscroll-behavior: contain;
+      height: calc(100vh - 48px);
+      border-left: 1px solid #ddd;
+    }
+    &.active {
+      opacity: 1;
+      & nav { display: block; }
+    }
+    /* Make the collapsed ToC header render white on gray also when it's a link */
+    & h2 a,
+    & h2 a:is(:link, :focus, :hover),
+    & a.toplink,
+    & a.toplink:hover {
+      color: white;
+      background-color: #444;
+      text-decoration: none;
+    }
+    & a.toplink {
+      margin: 2px 0.5em 0;
+    }
+  }
+}
+
+/* TOC layout for wide screens */
+@media screen and (min-width: 930px) {
+  body {
+    padding-right: 360px;
+    padding-right: calc(min(180px + 20%, 500px));
+  }
+  #toc {
+    position: fixed;
+    bottom: 0;
+    right: 0;
+    right: calc(50vw - 480px);
+    width: 312px;
+    margin: 0;
+    padding: 0;
+    z-index: 1;
+    & h2 {
+      margin: 0;
+      padding: 0.25em 1em 1em 0;
+    }
+    & nav {
+      display: block;
+      height: calc(90vh - 84px);
+      bottom: 0;
+      padding: 0.5em 0 2em;
+      overflow: auto;
+      overscroll-behavior: contain;
+      scrollbar-width: thin;
+    }
+    & a.toplink {
+      margin: 8px 0.5em 0;
+    }
+  }
+  img { /* future proofing */
+    max-width: 100%;
+    height: auto;
+  }
+}
+
+/* pagination */
+@media print {
+  body {
+    width: 100%;
+  }
+  p {
+    orphans: 3;
+    widows: 3;
+  }
+  #n-copyright-notice {
+    border-bottom: none;
+  }
+  #toc {
+    page-break-before: always;
+    border-top: none;
+    padding-top: 0;
+  }
+  #n-introduction {
+    page-break-before: always;
+  }
+  figure, pre, .vcard {
+    page-break-inside: avoid;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    page-break-after: avoid;
+  }
+  :is(h2, h3, h4, h5, h6)+*, dd {
+    page-break-before: avoid;
+  }
+  pre {
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    font-size: 10pt;
+  }
+  table {
+    border: 1px solid #ddd;
+  }
+  td {
+    border-top: 1px solid #ddd;
+  }
+}
+
+@page :first {
+  padding-top: 0;
+  @top-left {
+    content: normal;
+    border: none;
+  }
+  @top-center {
+    content: normal;
+    border: none;
+  }
+  @top-right {
+    content: normal;
+    border: none;
+  }
+}
+
+@page {
+  size: A4;
+  margin-bottom: 45mm;
+  padding-top: 20px;
+}
+
+/* Dark mode. */
+@media (prefers-color-scheme: dark) {
+:root {
+  --background-color: #121212;
+  --text-color: #f0f0f0;
+  --title-color: #fff;
+  --link-color: #4da4f0;
+  --highlight-color: #282828;
+  --line-color: #444;
+  --pilcrow-weak: #444;
+  --pilcrow-strong: #666;
+  scrollbar-color: #777 #333;
+}
+}
+
+/* SVG Trick: a prefix match works because only black and white are allowed */
+svg {
+  & :is([stroke="black"], [stroke^="#000"]) {
+    stroke: var(--text-color);
+  }
+  & :is([stroke="white"], [stroke^="#fff"]) {
+    stroke: var(--background-color);
+  }
+  & :is([fill="black"], [fill^="#000"], :not([fill])) {
+    fill: var(--text-color);
+  }
+  & :is([fill="white"], [fill^="#fff"]) {
+    fill: var(--background-color);
+  }
+}
+</style>
+
+</head>
+<body class="xml2rfc">
+<table class="ears">
+<thead><tr>
+<td class="left">Internet-Draft</td>
+<td class="center">Intent Security</td>
+<td class="right">June 2026</td>
+</tr></thead>
+<tfoot><tr>
+<td class="left">Jiang, et al.</td>
+<td class="center">Expires 1 January 2027</td>
+<td class="right">[Page]</td>
+</tr></tfoot>
+</table>
+<div id="external-metadata" class="document-information"></div>
+<div id="internal-metadata" class="document-information">
+<dl id="identifiers">
+<dt class="label-workgroup">Workgroup:</dt>
+<dd class="workgroup">Network Working Group</dd>
+<dt class="label-published">Published:</dt>
+<dd class="published">
+<time datetime="2026-06-30" class="published">30 June 2026</time>
+    </dd>
+<dt class="label-intended-status">Intended Status:</dt>
+<dd class="intended-status">Informational</dd>
+<dt class="label-expires">Expires:</dt>
+<dd class="expires"><time datetime="2027-01-01">1 January 2027</time></dd>
+<dt class="label-authors">Authors:</dt>
+<dd class="authors">
+<div class="author">
+      <div class="author-name">Y. Jiang</div>
+<div class="org">Huawei</div>
+</div>
+<div class="author">
+      <div class="author-name">L. Li</div>
+<div class="org">Huawei</div>
+</div>
+<div class="author">
+      <div class="author-name">Y. Song</div>
+<div class="org">Huawei</div>
+</div>
+<div class="author">
+      <div class="author-name">F. Liu</div>
+<div class="org">Huawei</div>
+</div>
+</dd>
+</dl>
+</div>
+<h1 id="title">Security Considerations and Requirements for Intent-Based Requests in Agentic Systems</h1>
+<section id="section-abstract">
+      <h2 id="abstract"><a href="#abstract" class="selfRef">Abstract</a></h2>
+<p id="section-abstract-1">
+        Intent-based requests enable users, applications, and agents to express goals and constraints without
+        specifying step-by-step procedures. Such intents are commonly translated into executable directives
+        and propagated across multiple entities (clients, agents, authorization components, orchestration
+        functions, and execution endpoints). This multi-hop processing expands the attack surface for
+        tampering, privilege escalation, constraint bypass, and intent drift. In addition, at the point
+        where an intent enters the system, a forged or unauthorized origin may cause actions to be taken
+        without valid consent.<a href="#section-abstract-1" class="pilcrow">¶</a></p>
+<p id="section-abstract-2">
+        This document provides a solution-agnostic security analysis for intent-based requests across
+        agentic systems. It presents attack scenarios, a threat model, security requirements, and
+        per-scenario mitigation considerations, supported by a reference model. The document is
+        Informational: it does not define a protocol, message format, or registry, and concrete mechanisms
+        are left to companion specifications. It emphasizes origin authentication and admission control,
+        constraint validation, invocation validation, multi-hop chain-of-custody, enforcement placement
+        across hops, and policy-driven responses to drift, while remaining independent of any specific
+        deployment domain.<a href="#section-abstract-2" class="pilcrow">¶</a></p>
+</section>
+<div id="status-of-memo">
+<section id="section-boilerplate.1">
+        <h2 id="name-status-of-this-memo">
+<a href="#name-status-of-this-memo" class="section-name selfRef">Status of This Memo</a>
+        </h2>
+<p id="section-boilerplate.1-1">
+        This Internet-Draft is submitted in full conformance with the
+        provisions of BCP 78 and BCP 79.<a href="#section-boilerplate.1-1" class="pilcrow">¶</a></p>
+<p id="section-boilerplate.1-2">
+        Internet-Drafts are working documents of the Internet Engineering Task
+        Force (IETF). Note that other groups may also distribute working
+        documents as Internet-Drafts. The list of current Internet-Drafts is
+        at <span><a href="https://datatracker.ietf.org/drafts/current/">https://datatracker.ietf.org/drafts/current/</a></span>.<a href="#section-boilerplate.1-2" class="pilcrow">¶</a></p>
+<p id="section-boilerplate.1-3">
+        Internet-Drafts are draft documents valid for a maximum of six months
+        and may be updated, replaced, or obsoleted by other documents at any
+        time. It is inappropriate to use Internet-Drafts as reference
+        material or to cite them other than as "work in progress."<a href="#section-boilerplate.1-3" class="pilcrow">¶</a></p>
+<p id="section-boilerplate.1-4">
+        This Internet-Draft will expire on 1 January 2027.<a href="#section-boilerplate.1-4" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="copyright">
+<section id="section-boilerplate.2">
+        <h2 id="name-copyright-notice">
+<a href="#name-copyright-notice" class="section-name selfRef">Copyright Notice</a>
+        </h2>
+<p id="section-boilerplate.2-1">
+            Copyright (c) 2026 IETF Trust and the persons identified as the
+            document authors. All rights reserved.<a href="#section-boilerplate.2-1" class="pilcrow">¶</a></p>
+<p id="section-boilerplate.2-2">
+            This document is subject to BCP 78 and the IETF Trust's Legal
+            Provisions Relating to IETF Documents
+            (<span><a href="https://trustee.ietf.org/license-info">https://trustee.ietf.org/license-info</a></span>) in effect on the date of
+            publication of this document. Please review these documents
+            carefully, as they describe your rights and restrictions with
+            respect to this document. Code Components extracted from this
+            document must include Revised BSD License text as described in
+            Section 4.e of the Trust Legal Provisions and are provided without
+            warranty as described in the Revised BSD License.<a href="#section-boilerplate.2-2" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="toc">
+<section id="section-toc.1">
+        <a href="#" onclick="scroll(0,0)" class="toplink">▲</a><h2 id="name-table-of-contents">
+<a href="#name-table-of-contents" class="section-name selfRef">Table of Contents</a>
+        </h2>
+<nav class="toc"><ul class="compact toc ulBare ulEmpty">
+<li class="compact toc ulBare ulEmpty" id="section-toc.1-1.1">
+            <p id="section-toc.1-1.1.1" class="keepWithNext"><a href="#section-1" class="auto internal xref">1</a>.  <a href="#name-introduction" class="internal xref">Introduction</a></p>
+<ul class="compact toc ulBare ulEmpty">
+<li class="compact toc ulBare ulEmpty" id="section-toc.1-1.1.2.1">
+                <p id="section-toc.1-1.1.2.1.1" class="keepWithNext"><a href="#section-1.1" class="auto internal xref">1.1</a>.  <a href="#name-scope" class="internal xref">Scope</a></p>
+</li>
+            </ul>
+</li>
+          <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.2">
+            <p id="section-toc.1-1.2.1"><a href="#section-2" class="auto internal xref">2</a>.  <a href="#name-terminology-and-conventions" class="internal xref">Terminology and Conventions</a></p>
+<ul class="compact toc ulBare ulEmpty">
+<li class="compact toc ulBare ulEmpty" id="section-toc.1-1.2.2.1">
+                <p id="section-toc.1-1.2.2.1.1" class="keepWithNext"><a href="#section-2.1" class="auto internal xref">2.1</a>.  <a href="#name-conventions" class="internal xref">Conventions</a></p>
+</li>
+              <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.2.2.2">
+                <p id="section-toc.1-1.2.2.2.1"><a href="#section-2.2" class="auto internal xref">2.2</a>.  <a href="#name-definitions" class="internal xref">Definitions</a></p>
+</li>
+              <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.2.2.3">
+                <p id="section-toc.1-1.2.2.3.1"><a href="#section-2.3" class="auto internal xref">2.3</a>.  <a href="#name-acronyms" class="internal xref">Acronyms</a></p>
+</li>
+            </ul>
+</li>
+          <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.3">
+            <p id="section-toc.1-1.3.1"><a href="#section-3" class="auto internal xref">3</a>.  <a href="#name-problem-statement-and-threa" class="internal xref">Problem Statement and Threat Model</a></p>
+<ul class="compact toc ulBare ulEmpty">
+<li class="compact toc ulBare ulEmpty" id="section-toc.1-1.3.2.1">
+                <p id="section-toc.1-1.3.2.1.1"><a href="#section-3.1" class="auto internal xref">3.1</a>.  <a href="#name-settings-and-example-archit" class="internal xref">Settings and Example Architecture</a></p>
+</li>
+              <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.3.2.2">
+                <p id="section-toc.1-1.3.2.2.1"><a href="#section-3.2" class="auto internal xref">3.2</a>.  <a href="#name-threats" class="internal xref">Threats</a></p>
+</li>
+              <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.3.2.3">
+                <p id="section-toc.1-1.3.2.3.1"><a href="#section-3.3" class="auto internal xref">3.3</a>.  <a href="#name-requirements" class="internal xref">Requirements</a></p>
+</li>
+            </ul>
+</li>
+          <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.4">
+            <p id="section-toc.1-1.4.1"><a href="#section-4" class="auto internal xref">4</a>.  <a href="#name-security-scenarios-and-miti" class="internal xref">Security Scenarios and Mitigation Considerations</a></p>
+<ul class="compact toc ulBare ulEmpty">
+<li class="compact toc ulBare ulEmpty" id="section-toc.1-1.4.2.1">
+                <p id="section-toc.1-1.4.2.1.1"><a href="#section-4.1" class="auto internal xref">4.1</a>.  <a href="#name-placement-of-checks" class="internal xref">Placement of Checks</a></p>
+</li>
+              <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.4.2.2">
+                <p id="section-toc.1-1.4.2.2.1"><a href="#section-4.2" class="auto internal xref">4.2</a>.  <a href="#name-scenario-1-spoofed-origin-a" class="internal xref">Scenario 1: Spoofed Origin and Non-Consensual Intent Origination</a></p>
+<ul class="compact toc ulBare ulEmpty">
+<li class="compact toc ulBare ulEmpty" id="section-toc.1-1.4.2.2.2.1">
+                    <p id="section-toc.1-1.4.2.2.2.1.1"><a href="#section-4.2.1" class="auto internal xref">4.2.1</a>.  <a href="#name-mitigation-considerations" class="internal xref">Mitigation Considerations</a></p>
+</li>
+                </ul>
+</li>
+              <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.4.2.3">
+                <p id="section-toc.1-1.4.2.3.1"><a href="#section-4.3" class="auto internal xref">4.3</a>.  <a href="#name-scenario-2-directive-tamper" class="internal xref">Scenario 2: Directive Tampering and Authorization Boundary Expansion</a></p>
+<ul class="compact toc ulBare ulEmpty">
+<li class="compact toc ulBare ulEmpty" id="section-toc.1-1.4.2.3.2.1">
+                    <p id="section-toc.1-1.4.2.3.2.1.1"><a href="#section-4.3.1" class="auto internal xref">4.3.1</a>.  <a href="#name-mitigation-considerations-2" class="internal xref">Mitigation Considerations</a></p>
+</li>
+                </ul>
+</li>
+              <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.4.2.4">
+                <p id="section-toc.1-1.4.2.4.1"><a href="#section-4.4" class="auto internal xref">4.4</a>.  <a href="#name-scenario-to-requirement-map" class="internal xref">Scenario-to-Requirement Mapping</a></p>
+</li>
+            </ul>
+</li>
+          <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.5">
+            <p id="section-toc.1-1.5.1"><a href="#section-5" class="auto internal xref">5</a>.  <a href="#name-reference-model" class="internal xref">Reference Model</a></p>
+<ul class="compact toc ulBare ulEmpty">
+<li class="compact toc ulBare ulEmpty" id="section-toc.1-1.5.2.1">
+                <p id="section-toc.1-1.5.2.1.1"><a href="#section-5.1" class="auto internal xref">5.1</a>.  <a href="#name-reference-model-entities" class="internal xref">Reference Model Entities</a></p>
+</li>
+              <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.5.2.2">
+                <p id="section-toc.1-1.5.2.2.1"><a href="#section-5.2" class="auto internal xref">5.2</a>.  <a href="#name-operational-overview" class="internal xref">Operational Overview</a></p>
+</li>
+            </ul>
+</li>
+          <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.6">
+            <p id="section-toc.1-1.6.1"><a href="#section-6" class="auto internal xref">6</a>.  <a href="#name-security-and-privacy-consid" class="internal xref">Security and Privacy Considerations</a></p>
+</li>
+          <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.7">
+            <p id="section-toc.1-1.7.1"><a href="#section-7" class="auto internal xref">7</a>.  <a href="#name-iana-considerations" class="internal xref">IANA Considerations</a></p>
+</li>
+          <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.8">
+            <p id="section-toc.1-1.8.1"><a href="#section-8" class="auto internal xref">8</a>.  <a href="#name-normative-references" class="internal xref">Normative References</a></p>
+</li>
+          <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.9">
+            <p id="section-toc.1-1.9.1"><a href="#section-9" class="auto internal xref">9</a>.  <a href="#name-informative-references" class="internal xref">Informative References</a></p>
+</li>
+          <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.10">
+            <p id="section-toc.1-1.10.1"><a href="#appendix-A" class="auto internal xref"></a><a href="#name-acknowledgments" class="internal xref">Acknowledgments</a></p>
+</li>
+          <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.11">
+            <p id="section-toc.1-1.11.1"><a href="#appendix-B" class="auto internal xref"></a><a href="#name-authors-addresses" class="internal xref">Authors' Addresses</a></p>
+</li>
+        </ul>
+</nav>
+</section>
+</div>
+<div id="intro">
+<section id="section-1">
+      <h2 id="name-introduction">
+<a href="#section-1" class="section-number selfRef">1. </a><a href="#name-introduction" class="section-name selfRef">Introduction</a>
+      </h2>
+<p id="section-1-1">
+        Intent-based interaction is increasingly adopted in automation, orchestration, and agentic systems,
+        where a request expresses desired outcomes and constraints rather than explicit procedures.
+        A receiving system (or a chain of systems) translates the intent into executable directives and
+        invokes tools or services to achieve the intended outcome.<a href="#section-1-1" class="pilcrow">¶</a></p>
+<p id="section-1-2">
+        Multi-hop processing (client-to-agent, agent-to-agent, agent-to-tool/service) introduces security
+        risks beyond traditional single-hop APIs, including: (1) integrity and substitution attacks against
+        derived directives, (2) privilege escalation during tool/service invocation, (3) constraint bypass,
+        (4) multi-hop intent drift where constraints degrade or diverge over transformations, and
+        (5) admission-time risks where an intent of spoofed or unauthorized origin is accepted and acted
+        upon without valid consent.<a href="#section-1-2" class="pilcrow">¶</a></p>
+<p id="section-1-3">
+        This document does not define a new protocol. It provides a security-oriented threat analysis,
+        security requirements, attack scenarios with mitigation considerations, and a reference model to
+        support future standardization and interoperable designs. Concrete mechanisms (message formats,
+        token claims, processing rules, registries) are out of scope and are expected to be specified in
+        companion documents. The document leads with the attack scenarios; the reference model is provided
+        later as supporting structure.<a href="#section-1-3" class="pilcrow">¶</a></p>
+<div id="scope">
+<section id="section-1.1">
+        <h3 id="name-scope">
+<a href="#section-1.1" class="section-number selfRef">1.1. </a><a href="#name-scope" class="section-name selfRef">Scope</a>
+        </h3>
+<p id="section-1.1-1">
+          This document focuses on security considerations for intent-based requests in multi-hop agentic
+          systems. While examples may reference telecom or networking contexts, the analysis applies
+          broadly to any domain where intent processing spans multiple trust boundaries. It complements
+          requirements-oriented analyses of agent security such as
+          <span>[<a href="#I-D.ni-a2a-ai-agent-security-requirements" class="cite xref">I-D.ni-a2a-ai-agent-security-requirements</a>]</span>, focusing specifically on intent
+          origin, multi-hop directive integrity, and drift.<a href="#section-1.1-1" class="pilcrow">¶</a></p>
+</section>
+</div>
+</section>
+</div>
+<div id="terminology">
+<section id="section-2">
+      <h2 id="name-terminology-and-conventions">
+<a href="#section-2" class="section-number selfRef">2. </a><a href="#name-terminology-and-conventions" class="section-name selfRef">Terminology and Conventions</a>
+      </h2>
+<div id="conventions">
+<section id="section-2.1">
+        <h3 id="name-conventions">
+<a href="#section-2.1" class="section-number selfRef">2.1. </a><a href="#name-conventions" class="section-name selfRef">Conventions</a>
+        </h3>
+<p id="section-2.1-1">
+          The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT",
+          "RECOMMENDED", "NOT RECOMMENDED", "MAY", and "OPTIONAL" in this document are to be interpreted
+          as described in BCP 14 <span>[<a href="#RFC2119" class="cite xref">RFC2119</a>]</span> <span>[<a href="#RFC8174" class="cite xref">RFC8174</a>]</span> when, and only when,
+          they appear in all capitals, as shown here. This document is Informational; descriptive text
+          ("the system validates ...") is used in preference to normative keywords.<a href="#section-2.1-1" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="definitions">
+<section id="section-2.2">
+        <h3 id="name-definitions">
+<a href="#section-2.2" class="section-number selfRef">2.2. </a><a href="#name-definitions" class="section-name selfRef">Definitions</a>
+        </h3>
+<p id="section-2.2-1">
+          This document uses the following terms:<a href="#section-2.2-1" class="pilcrow">¶</a></p>
+<span class="break"></span><dl class="dlParallel" id="section-2.2-2">
+          <dt id="section-2.2-2.1">Intent:</dt>
+          <dd style="margin-left: 1.5em" id="section-2.2-2.2">A declarative expression of desired operational goals and outcomes, without
+              specifying how to achieve or implement them. This definition is aligned with
+              intent-based networking (IBN) guidance <span>[<a href="#RFC9315" class="cite xref">RFC9315</a>]</span> <span>[<a href="#RFC9316" class="cite xref">RFC9316</a>]</span>
+              and its use cases <span>[<a href="#I-D.irtf-nmrg-ibn-usecases" class="cite xref">I-D.irtf-nmrg-ibn-usecases</a>]</span>.<a href="#section-2.2-2.2" class="pilcrow">¶</a>
+</dd>
+          <dd class="break"></dd>
+<dt id="section-2.2-2.3">Intent-Based System (IBS):</dt>
+          <dd style="margin-left: 1.5em" id="section-2.2-2.4">A system (or chain of systems) that receives an intent and translates, validates, and
+              orchestrates it toward fulfillment. The term parallels intent-based system decomposition
+              used in IBN <span>[<a href="#RFC9315" class="cite xref">RFC9315</a>]</span> and is not specific to any deployment domain.<a href="#section-2.2-2.4" class="pilcrow">¶</a>
+</dd>
+          <dd class="break"></dd>
+<dt id="section-2.2-2.5">Intent Translation:</dt>
+          <dd style="margin-left: 1.5em" id="section-2.2-2.6">The process of transforming an intent into more concrete representations,
+              such as constraints, objectives, candidate procedures, or executable directives.<a href="#section-2.2-2.6" class="pilcrow">¶</a>
+</dd>
+          <dd class="break"></dd>
+<dt id="section-2.2-2.7">Constraint:</dt>
+          <dd style="margin-left: 1.5em" id="section-2.2-2.8">A condition that limits acceptable outcomes or actions. Constraints may include
+              invariants, policy rules, safety boundaries, and compliance requirements.<a href="#section-2.2-2.8" class="pilcrow">¶</a>
+</dd>
+          <dd class="break"></dd>
+<dt id="section-2.2-2.9">Constraint Validation:</dt>
+          <dd style="margin-left: 1.5em" id="section-2.2-2.10">Verifying whether an intent and/or its derived artifacts comply with
+              applicable constraints, invariants, policy rules, and safety boundary requirements.<a href="#section-2.2-2.10" class="pilcrow">¶</a>
+</dd>
+          <dd class="break"></dd>
+<dt id="section-2.2-2.11">Invocation:</dt>
+          <dd style="margin-left: 1.5em" id="section-2.2-2.12">A request to a tool or service intended to fulfill an intent (e.g., API call,
+              workflow step, actuation command).<a href="#section-2.2-2.12" class="pilcrow">¶</a>
+</dd>
+          <dd class="break"></dd>
+<dt id="section-2.2-2.13">Invocation Validation:</dt>
+          <dd style="margin-left: 1.5em" id="section-2.2-2.14">Determining whether an invoker holds the required privileges to invoke
+              a tool or service and whether invocation parameters satisfy the requirements
+              and constraints specified by the intent.<a href="#section-2.2-2.14" class="pilcrow">¶</a>
+</dd>
+          <dd class="break"></dd>
+<dt id="section-2.2-2.15">Observation:</dt>
+          <dd style="margin-left: 1.5em" id="section-2.2-2.16">Telemetry, events, measurements, or other signals used for monitoring and assurance.<a href="#section-2.2-2.16" class="pilcrow">¶</a>
+</dd>
+          <dd class="break"></dd>
+<dt id="section-2.2-2.17">Drift:</dt>
+          <dd style="margin-left: 1.5em" id="section-2.2-2.18">A divergence between the intent (including its constraints) and the realized
+              plan or actions over time or across multi-hop transformations. In the realized trace, such
+              a divergence may appear in two distinct shapes: (a) a constraint that is present but violated
+              by a realized action, or (b) an expected control (e.g., an authorization or consent check)
+              that is absent from the trace (a silent failure). These two shapes require different audit
+              evidence and detection logic.<a href="#section-2.2-2.18" class="pilcrow">¶</a>
+</dd>
+          <dd class="break"></dd>
+<dt id="section-2.2-2.19">Derived Directive:</dt>
+          <dd style="margin-left: 1.5em" id="section-2.2-2.20">An executable or enforceable artifact generated from an intent through translation,
+              such as an allowed rule set, capability token, or authorization grant.<a href="#section-2.2-2.20" class="pilcrow">¶</a>
+</dd>
+          <dd class="break"></dd>
+<dt id="section-2.2-2.21">Intent Originator:</dt>
+          <dd style="margin-left: 1.5em" id="section-2.2-2.22">The entity that produces an intent (e.g., a user, an application, or an agent).
+              The originator is the asserted source of the intent and is distinct from the entity
+              that merely transports or forwards it.<a href="#section-2.2-2.22" class="pilcrow">¶</a>
+</dd>
+          <dd class="break"></dd>
+<dt id="section-2.2-2.23">Admission Control:</dt>
+          <dd style="margin-left: 1.5em" id="section-2.2-2.24">The decision, taken before an intent is forwarded into or accepted by the
+              processing chain, of whether to admit the intent, based on the verified origin,
+              the originator's authorization to request the targeted service, and applicable
+              consent.<a href="#section-2.2-2.24" class="pilcrow">¶</a>
+</dd>
+          <dd class="break"></dd>
+<dt id="section-2.2-2.25">Admission Assertion:</dt>
+          <dd style="margin-left: 1.5em" id="section-2.2-2.26">An abstract artifact by which an admission point conveys its verified origin and admission
+              decision (and any associated security context) to downstream entities for re-verification.
+              Its concrete encoding is out of scope for this document.<a href="#section-2.2-2.26" class="pilcrow">¶</a>
+</dd>
+        <dd class="break"></dd>
+</dl>
+</section>
+</div>
+<div id="acronyms">
+<section id="section-2.3">
+        <h3 id="name-acronyms">
+<a href="#section-2.3" class="section-number selfRef">2.3. </a><a href="#name-acronyms" class="section-name selfRef">Acronyms</a>
+        </h3>
+<span class="break"></span><dl class="dlParallel" id="section-2.3-1">
+          <dt id="section-2.3-1.1">IBN:</dt>
+          <dd style="margin-left: 1.5em" id="section-2.3-1.2">Intent-Based Networking<a href="#section-2.3-1.2" class="pilcrow">¶</a>
+</dd>
+          <dd class="break"></dd>
+<dt id="section-2.3-1.3">IBS:</dt>
+          <dd style="margin-left: 1.5em" id="section-2.3-1.4">Intent-Based System<a href="#section-2.3-1.4" class="pilcrow">¶</a>
+</dd>
+        <dd class="break"></dd>
+</dl>
+</section>
+</div>
+</section>
+</div>
+<div id="problem">
+<section id="section-3">
+      <h2 id="name-problem-statement-and-threa">
+<a href="#section-3" class="section-number selfRef">3. </a><a href="#name-problem-statement-and-threa" class="section-name selfRef">Problem Statement and Threat Model</a>
+      </h2>
+<p id="section-3-1">
+        In many agentic systems, an intent is translated into executable directives (e.g., an
+        allowed rule set) that must be propagated across multiple entities and enforced at
+        execution endpoints. However, existing designs often lack end-to-end mechanisms that
+        jointly ensure: (1) the intent originates from an authenticated and authorized originator
+        and has obtained any required consent before admission, (2) directives remain within
+        authorized boundaries across transformations and propagation, (3) constraints are validated
+        before execution, (4) invocations are privilege-checked and constraint-checked at each call
+        boundary, and (5) drift is detected and handled under policy.<a href="#section-3-1" class="pilcrow">¶</a></p>
+<div id="ExampleArchitecture">
+<section id="section-3.1">
+        <h3 id="name-settings-and-example-archit">
+<a href="#section-3.1" class="section-number selfRef">3.1. </a><a href="#name-settings-and-example-archit" class="section-name selfRef">Settings and Example Architecture</a>
+        </h3>
+<p id="section-3.1-1">
+            This document considers two structural settings. Setting A is the origination/admission
+            boundary, where intents enter the system from possibly many co-resident applications or agents
+            at an entry point such as a user-facing device; this is the locus of Scenario 1 (origin,
+            authorization, and consent) and is not inherently multi-hop. Setting B is the multi-hop
+            processing chain, where an admitted intent is translated and propagated across multiple
+            entities before execution; this is the locus of Scenario 2 (directive integrity and drift).
+            The example below illustrates Setting B; an illustration of Setting A appears in Scenario 1
+            (<a href="#scn-origin" class="auto internal xref">Section 4.2</a>).<a href="#section-3.1-1" class="pilcrow">¶</a></p>
+<p id="section-3.1-2">
+            The following example is illustrative and is based on a sequential multi-agent orchestration
+            pattern observed in deployed frameworks. This section presents an illustrative sequential multi-agent
+            pattern; other deployments may use parallel, handoff, group-chat, manager-worker, or
+            tool-centric architectures. The property of interest, common to such patterns, is that intent
+            is decomposed and propagated across entities and must remain preserved, verifiable, and
+            contextually appropriate as it flows through the system.<a href="#section-3.1-2" class="pilcrow">¶</a></p>
+<span id="name-illustrative-sequential-mul"></span><div id="fig-x1">
+<figure id="figure-1">
+          <div class="alignLeft art-ascii-art art-text artwork" id="section-3.1-3.1">
+<pre>
+                                          |intent input
+                                          v
+                                  +--------------------+
+                                  |      Agent1        |
+                                  | (e.g., Summarizer) |
+                                  +--------------------+
+                                          v
+                                  +--------------------+
+                                  |     Agent2         |
+                                  | (e.g., Translator) |
+                                  +--------------------+
+                                          v
+                                  +--------------------+
+                                  |     Agent3         |
+                                  |   (e.g., QA)       |
+                                  +--------------------+
+                                          |    Result
+                                          v</pre>
+</div>
+<figcaption><a href="#figure-1" class="selfRef">Figure 1</a>:
+<a href="#name-illustrative-sequential-mul" class="selfRef">Illustrative sequential multi-agent processing</a>
+          </figcaption></figure>
+</div>
+<p id="section-3.1-4">
+            <a href="#fig-x1" class="auto internal xref">Figure 1</a> illustrates one such pattern, the sequential orchestration of the
+            Microsoft Agent Framework <span>[<a href="#MS-AF-SEQ" class="cite xref">MS-AF-SEQ</a>]</span>, cited here only as a concrete example
+            of a deployed framework. Agents process intents in a pipeline; by default, each agent receives
+            the conversation from the previous agent, preserving context while allowing specialized
+            processing at each stage. Characteristics relevant to the threats below include:<a href="#section-3.1-4" class="pilcrow">¶</a></p>
+<ol start="1" type="1" class="normal type-1" id="section-3.1-5">
+          <li id="section-3.1-5.1">Agent Pipeline: agents are arranged in a predefined sequence where output from one agent becomes input for the next.<a href="#section-3.1-5.1" class="pilcrow">¶</a>
+</li>
+          <li id="section-3.1-5.2">Shared Context: by default, each agent consumes the previous agent's full conversation, so context is preserved across the pipeline; the framework also allows agents to be configured to consume only the previous agent's response messages, which truncates earlier context.<a href="#section-3.1-5.2" class="pilcrow">¶</a>
+</li>
+          <li id="section-3.1-5.3">Human-in-the-Loop: optional approval points for sensitive operations (e.g., tools marked as approval-required).<a href="#section-3.1-5.3" class="pilcrow">¶</a>
+</li>
+          <li id="section-3.1-5.4">Mixed Executors: the ability to combine LLM-based agents with custom code executors.<a href="#section-3.1-5.4" class="pilcrow">¶</a>
+</li>
+        </ol>
+<p id="section-3.1-6">The original intent can be preserved through the shared conversation history, with each agent
+          adding specialized processing while maintaining contextual continuity. However, under certain
+          threats, the intent may change, potentially introducing security risks. The next section
+          describes these threats.<a href="#section-3.1-6" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="threats">
+<section id="section-3.2">
+        <h3 id="name-threats">
+<a href="#section-3.2" class="section-number selfRef">3.2. </a><a href="#name-threats" class="section-name selfRef">Threats</a>
+        </h3>
+<p id="section-3.2-1">
+          With reference to the illustrative pattern in <a href="#ExampleArchitecture" class="auto internal xref">Section 3.1</a>, the
+          following representative threats are considered. T1-T5 arise during multi-hop intent processing,
+          while T6-T7 arise at the intent origination/admission boundary, i.e., where an intent enters the
+          system:<a href="#section-3.2-1" class="pilcrow">¶</a></p>
+<span class="break"></span><dl class="dlParallel" id="section-3.2-2">
+          <dt id="section-3.2-2.1">T1 (Directive Tampering/Substitution):</dt>
+          <dd style="margin-left: 1.5em" id="section-3.2-2.2">A malicious or compromised intermediary agent (a node that terminates any
+          hop-by-hop secure channel, not merely an on-path observer) modifies conversation history or derived
+          directives between pipeline stages, altering budget constraints or action parameters while maintaining superficial coherence.<a href="#section-3.2-2.2" class="pilcrow">¶</a>
+</dd>
+          <dd class="break"></dd>
+<dt id="section-3.2-2.3">T2 (Unauthorized Invocation / Privilege Escalation):</dt>
+          <dd style="margin-left: 1.5em" id="section-3.2-2.4">An agent abuses mixed-executor capabilities by smuggling
+          unauthorized commands through parameter injection, bypassing the intended privilege boundary because custom code executors
+          run arbitrary code without an enforced access-control layer.<a href="#section-3.2-2.4" class="pilcrow">¶</a>
+</dd>
+          <dd class="break"></dd>
+<dt id="section-3.2-2.5">T3 (Constraint Bypass):</dt>
+          <dd style="margin-left: 1.5em" id="section-3.2-2.6">Security constraints degrade across pipeline stages due to context truncation or
+          improper inheritance, violating the shared-context integrity assumption.<a href="#section-3.2-2.6" class="pilcrow">¶</a>
+</dd>
+          <dd class="break"></dd>
+<dt id="section-3.2-2.7">T4 (Multi-Hop Semantic Drift):</dt>
+          <dd style="margin-left: 1.5em" id="section-3.2-2.8">Gradual semantic deviation occurs as agents reinterpret ambiguous instructions
+          across hops, causing final actions to diverge from original intent boundaries despite syntactically intact messages.<a href="#section-3.2-2.8" class="pilcrow">¶</a>
+</dd>
+          <dd class="break"></dd>
+<dt id="section-3.2-2.9">T5 (Monitoring Evasion / False Observations):</dt>
+          <dd style="margin-left: 1.5em" id="section-3.2-2.10">Attackers evade detection by suppressing, forging, or selectively presenting
+              observations used for assurance and drift detection.<a href="#section-3.2-2.10" class="pilcrow">¶</a>
+</dd>
+          <dd class="break"></dd>
+<dt id="section-3.2-2.11">T6 (Origin Spoofing / Forged Provenance):</dt>
+          <dd style="margin-left: 1.5em" id="section-3.2-2.12">A co-resident or upstream malicious application or agent fabricates an
+              intent artifact that appears to originate from the user or a legitimate originator, so that downstream entities accept and
+              act on an intent that the claimed originator never authorized.<a href="#section-3.2-2.12" class="pilcrow">¶</a>
+</dd>
+          <dd class="break"></dd>
+<dt id="section-3.2-2.13">T7 (Unauthorized or Non-Consensual Origination):</dt>
+          <dd style="margin-left: 1.5em" id="section-3.2-2.14">An originator that is not entitled to request the targeted
+              service, or that is operating in a disallowed execution context (e.g., unattended background execution), issues a high-impact
+              intent without valid user consent; the system admits it because it does not gate on the originator's eligibility, execution
+              context, or explicit consent.<a href="#section-3.2-2.14" class="pilcrow">¶</a>
+</dd>
+        <dd class="break"></dd>
+</dl>
+<p id="section-3.2-3">NOTE1: By default, the example framework does not provide cryptographic binding between pipeline stages, so agents cannot be assumed to be mutually trustworthy. The degree of such binding may vary across implementations. In particular, T1 is a node-level threat: transport security (e.g., a hop-by-hop secure channel) protects the link between two entities but not against a malicious or compromised intermediary that terminates the channel.<a href="#section-3.2-3" class="pilcrow">¶</a></p>
+<p id="section-3.2-4">NOTE2: Human approval may be agent-triggered rather than enforced by the receiver, creating bypass opportunities.<a href="#section-3.2-4" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="requirements">
+<section id="section-3.3">
+        <h3 id="name-requirements">
+<a href="#section-3.3" class="section-number selfRef">3.3. </a><a href="#name-requirements" class="section-name selfRef">Requirements</a>
+        </h3>
+<p id="section-3.3-1">
+          Based on the threats above, this document identifies the following security requirements,
+          grouped by where in the intent lifecycle they apply. The grouping distinguishes controls that
+          act before an intent enters the system (admission-time) from those that act during multi-hop
+          processing and at execution. Requirement numbering (R1-R9) is retained from prior revisions and
+          is not sequential within groups.<a href="#section-3.3-1" class="pilcrow">¶</a></p>
+<p id="section-3.3-2">Transformation and propagation requirements:<a href="#section-3.3-2" class="pilcrow">¶</a></p>
+<span class="break"></span><dl class="dlParallel" id="section-3.3-3">
+          <dt id="section-3.3-3.1">R1 (Provenance and Authorization Boundary Binding):</dt>
+          <dd style="margin-left: 1.5em" id="section-3.3-3.2">The system provides a verifiable binding between the intent, derived directives,
+              and the applicable authorization boundary, such that unauthorized expansion can be
+              detected or prevented.<a href="#section-3.3-3.2" class="pilcrow">¶</a>
+</dd>
+          <dd class="break"></dd>
+<dt id="section-3.3-3.3">R2 (Chain-of-Custody for Derived Directives):</dt>
+          <dd style="margin-left: 1.5em" id="section-3.3-3.4">The system protects derived directives against tampering and substitution
+              across multi-hop propagation.<a href="#section-3.3-3.4" class="pilcrow">¶</a>
+</dd>
+          <dd class="break"></dd>
+<dt id="section-3.3-3.5">R3 (Constraint Validation):</dt>
+          <dd style="margin-left: 1.5em" id="section-3.3-3.6">The system validates the intent and/or derived artifacts against applicable
+              constraints, invariants, policy rules, and safety boundaries before accepting or
+              executing actions.<a href="#section-3.3-3.6" class="pilcrow">¶</a>
+</dd>
+        <dd class="break"></dd>
+</dl>
+<p id="section-3.3-4">Invocation-time requirements:<a href="#section-3.3-4" class="pilcrow">¶</a></p>
+<span class="break"></span><dl class="dlParallel" id="section-3.3-5">
+          <dt id="section-3.3-5.1">R4 (Invocation Validation):</dt>
+          <dd style="margin-left: 1.5em" id="section-3.3-5.2">The system validates that an invoker holds the required privileges to invoke
+              a tool/service and that invocation parameters satisfy intent constraints prior to
+              and/or at invocation time.<a href="#section-3.3-5.2" class="pilcrow">¶</a>
+</dd>
+          <dd class="break"></dd>
+<dt id="section-3.3-5.3">R5 (Non-Bypass Enforcement):</dt>
+          <dd style="margin-left: 1.5em" id="section-3.3-5.4">The execution endpoint enforces constraints and authorization boundaries such
+              that direct/side-path invocation cannot bypass required checks.<a href="#section-3.3-5.4" class="pilcrow">¶</a>
+</dd>
+        <dd class="break"></dd>
+</dl>
+<p id="section-3.3-6">Assurance requirements:<a href="#section-3.3-6" class="pilcrow">¶</a></p>
+<span class="break"></span><dl class="dlParallel" id="section-3.3-7">
+          <dt id="section-3.3-7.1">R6 (Observability and Auditability):</dt>
+          <dd style="margin-left: 1.5em" id="section-3.3-7.2">The system provides sufficient observations and audit evidence to support
+              compliance assessment, drift detection, and incident investigation. The audit evidence is
+              able to express both shapes of divergence: a constraint present but violated, and an
+              expected control absent from the trace. Observations benefit from a shared, interoperable
+              schema so that audit evidence remains portable across multi-hop, multi-vendor chains rather
+              than siloed per intermediary; emerging generative-AI observability conventions are one
+              example of such a schema (e.g., the OpenTelemetry GenAI semantic conventions
+              <span>[<a href="#OTEL-GENAI" class="cite xref">OTEL-GENAI</a>]</span>). This document does not mandate or endorse a specific
+              observation format.<a href="#section-3.3-7.2" class="pilcrow">¶</a>
+</dd>
+          <dd class="break"></dd>
+<dt id="section-3.3-7.3">R7 (Policy-Driven Drift Response):</dt>
+          <dd style="margin-left: 1.5em" id="section-3.3-7.4">Upon drift detection or constraint violation, the system supports policy-driven
+              responses (e.g., deny, degrade, re-confirm, re-negotiate, fallback). A violated constraint
+              and an absent expected control may map to different responses.<a href="#section-3.3-7.4" class="pilcrow">¶</a>
+</dd>
+        <dd class="break"></dd>
+</dl>
+<p id="section-3.3-8">Admission-time requirements:<a href="#section-3.3-8" class="pilcrow">¶</a></p>
+<span class="break"></span><dl class="dlParallel" id="section-3.3-9">
+          <dt id="section-3.3-9.1">R8 (Origin Authentication):</dt>
+          <dd style="margin-left: 1.5em" id="section-3.3-9.2">The system provides a verifiable binding between an intent artifact and the
+              identity of its actual originator, such that a forged or spoofed origin can be detected before the intent is admitted
+              or forwarded.<a href="#section-3.3-9.2" class="pilcrow">¶</a>
+</dd>
+          <dd class="break"></dd>
+<dt id="section-3.3-9.3">R9 (Originator Authorization and Consent-Gated Admission):</dt>
+          <dd style="margin-left: 1.5em" id="section-3.3-9.4">Before admitting or forwarding an intent, the system
+              determines whether the originator is permitted to request the targeted service, based on risk-relevant originator
+              attributes and applicable permission policy. For high-impact or irreversible actions, the system additionally obtains
+              and verifies explicit user consent. Intents from unauthorized originators, from originators in a disallowed execution
+              context, or lacking required consent are rejected or escalated.<a href="#section-3.3-9.4" class="pilcrow">¶</a>
+</dd>
+        <dd class="break"></dd>
+</dl>
+</section>
+</div>
+</section>
+</div>
+<div id="scenarios">
+<section id="section-4">
+      <h2 id="name-security-scenarios-and-miti">
+<a href="#section-4" class="section-number selfRef">4. </a><a href="#name-security-scenarios-and-miti" class="section-name selfRef">Security Scenarios and Mitigation Considerations</a>
+      </h2>
+<p id="section-4-1">
+        This section describes representative security scenarios and abstract mitigation considerations.
+        Each scenario uses a consistent template (Setting, Actors, Assets, Attack Sketch, Impact,
+        Relevant Requirements) followed by mitigation considerations. The considerations indicate the
+        class of control point where a problem may be addressed; they do not define concrete mechanisms,
+        message formats, or processing rules, which are left to companion documents.
+        <a href="#placement" class="auto internal xref">Section 4.1</a> first establishes a common enforcement-placement model that both
+        scenarios rely on.<a href="#section-4-1" class="pilcrow">¶</a></p>
+<div id="placement">
+<section id="section-4.1">
+        <h3 id="name-placement-of-checks">
+<a href="#section-4.1" class="section-number selfRef">4.1. </a><a href="#name-placement-of-checks" class="section-name selfRef">Placement of Checks</a>
+        </h3>
+<p id="section-4.1-1">
+          A recurring, scenario-agnostic design question is where, along the path from origination to
+          execution, a given check is performed. This applies both to admission checks (Scenario 1) and to
+          directive-integrity checks (Scenario 2). Three placements are possible:<a href="#section-4.1-1" class="pilcrow">¶</a></p>
+<span class="break"></span><dl class="dlNewline" id="section-4.1-2">
+          <dt id="section-4.1-2.1">Endpoint-only:</dt>
+          <dd style="margin-left: 1.5em" id="section-4.1-2.2">Only the final execution endpoint validates. This is simple, but it cannot detect
+              tampering unless the original binding survives intact to the endpoint, it fails if a
+              side path bypasses the endpoint's gate, and drift accumulates without early signal.<a href="#section-4.1-2.2" class="pilcrow">¶</a>
+</dd>
+          <dd class="break"></dd>
+<dt id="section-4.1-2.3">Earliest-point / per-hop:</dt>
+          <dd style="margin-left: 1.5em" id="section-4.1-2.4">The originating or each intermediary point validates. This enables early detection and
+              local enforcement, but a malicious hop will not honestly validate itself, every hop is
+              exposed to the intent, and each hop must understand the relevant semantics.<a href="#section-4.1-2.4" class="pilcrow">¶</a>
+</dd>
+          <dd class="break"></dd>
+<dt id="section-4.1-2.5">Combined (hybrid):</dt>
+          <dd style="margin-left: 1.5em" id="section-4.1-2.6">A property is captured or bound at the earliest point where it is verifiable, carried
+              end-to-end so it survives relays, re-verified at trust-boundary crossings for early
+              detection, and re-verified at the execution endpoint as the authoritative, non-bypassable
+              gate (R5). Intermediaries are not trusted; intermediate checks are defense-in-depth rather
+              than the sole line of defense.<a href="#section-4.1-2.6" class="pilcrow">¶</a>
+</dd>
+        <dd class="break"></dd>
+</dl>
+<p id="section-4.1-3">
+          A consequence is that integrity cannot rely on transport security alone: an intermediary that
+          re-terminates a transport-layer secure channel (e.g., a relay or proxy) breaks transport-layer
+          evidence, so binding is applied at the intent/directive layer such that it passes through such
+          intermediaries opaquely.<a href="#section-4.1-3" class="pilcrow">¶</a></p>
+<p id="section-4.1-4">
+          In practice, the Invocation Gate, Constraint Validator, and Admission Control functions may be
+          realized by an AI/agent gateway, a tool gateway, or an on-device admission point. Such gateways
+          are natural policy enforcement points, but a single gateway can be bypassed by side paths (e.g.,
+          directly reachable tool servers), which is why the endpoint also enforces (R5).<a href="#section-4.1-4" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="scn-origin">
+<section id="section-4.2">
+        <h3 id="name-scenario-1-spoofed-origin-a">
+<a href="#section-4.2" class="section-number selfRef">4.2. </a><a href="#name-scenario-1-spoofed-origin-a" class="section-name selfRef">Scenario 1: Spoofed Origin and Non-Consensual Intent Origination</a>
+        </h3>
+<span class="break"></span><dl class="dlNewline" id="section-4.2-1">
+          <dt id="section-4.2-1.1">Setting:</dt>
+          <dd style="margin-left: 1.5em" id="section-4.2-1.2">A user-facing device (e.g., a terminal) hosts multiple applications and agents. Any of them
+              can express intents that are submitted to a local Intent Client and forwarded to a remote
+              Intent-Based System (IBS) that accepts intent artifacts and may trigger high-impact services
+              or actions. The remote receiver acts on whichever intents it admits.<a href="#section-4.2-1.2" class="pilcrow">¶</a>
+</dd>
+          <dd class="break"></dd>
+<dt id="section-4.2-1.3">Actors:</dt>
+          <dd style="margin-left: 1.5em" id="section-4.2-1.4">Intent Originator (the user or a legitimate originator), a legitimate local agent, a
+              malicious co-resident application/agent, the Intent Client, and the remote IBS /
+              Tool/Service Provider.<a href="#section-4.2-1.4" class="pilcrow">¶</a>
+</dd>
+          <dd class="break"></dd>
+<dt id="section-4.2-1.5">Assets:</dt>
+          <dd style="margin-left: 1.5em" id="section-4.2-1.6">Originator identity and account/identity bindings, user consent, the permission policy that
+              determines which originators may request which services, billing/spending limits, and safety
+              constraints.<a href="#section-4.2-1.6" class="pilcrow">¶</a>
+</dd>
+          <dd class="break"></dd>
+<dt id="section-4.2-1.7">Attack Sketch:</dt>
+          <dd style="margin-left: 1.5em" id="section-4.2-1.8">
+            <ol start="1" type="1" class="normal type-1" id="section-4.2-1.8.1">
+              <li id="section-4.2-1.8.1.1">The malicious application fabricates an intent artifact that appears to originate from
+                  the user or a legitimate agent (spoofed provenance); or an originator that is not
+                  entitled to the targeted service, or is running unattended in the background, issues a
+                  high-impact intent.<a href="#section-4.2-1.8.1.1" class="pilcrow">¶</a>
+</li>
+              <li id="section-4.2-1.8.1.2">The Intent Client / IBS forwards the intent, and the remote receiver executes
+                  high-impact actions (purchases, data disclosure, account or state changes) without
+                  verifying the actual originator, the originator's eligibility for the requested service,
+                  the originator's execution context, or valid user consent.<a href="#section-4.2-1.8.1.2" class="pilcrow">¶</a>
+</li>
+            </ol>
+</dd>
+          <dd class="break"></dd>
+<dt id="section-4.2-1.9">Impact:</dt>
+          <dd style="margin-left: 1.5em" id="section-4.2-1.10">Unauthorized actions, fraud, privacy leakage, billing abuse, and irreversible side effects.<a href="#section-4.2-1.10" class="pilcrow">¶</a>
+</dd>
+          <dd class="break"></dd>
+<dt id="section-4.2-1.11">Relevant Requirements:</dt>
+          <dd style="margin-left: 1.5em" id="section-4.2-1.12">R8 (Origin Authentication), R9 (Originator Authorization and Consent-Gated Admission),
+              R3 (Constraint Validation), R6 (Observability and Auditability).<a href="#section-4.2-1.12" class="pilcrow">¶</a>
+</dd>
+        <dd class="break"></dd>
+</dl>
+<p id="section-4.2-2">
+          <a href="#fig-scn1" class="auto internal xref">Figure 2</a> illustrates the attack: a spoofed or unauthorized origin (marked X)
+          among co-resident applications on a user-facing device, whose intent is forwarded without
+          origin or consent verification and is acted upon at the execution endpoint. The controls that
+          address this attack are discussed in <a href="#mit-origin" class="auto internal xref">Section 4.2.1</a>.<a href="#section-4.2-2" class="pilcrow">¶</a></p>
+<span id="name-scenario-1-spoofed-unauthor"></span><div id="fig-scn1">
+<figure id="figure-2">
+          <div class="alignLeft art-ascii-art art-text artwork" id="section-4.2-3.1">
+<pre>
+   +------------------------------------------+
+   |  user-facing device                      |
+   |                                          |
+   |   [ legit app ]     [ malicious app (X) ]|
+   |          \             /                 |
+   |           v           v                  |
+   |       +-------------------+              |
+   |       |   Intent Client   |              |
+   |       +---------+---------+              |
+   +-----------------|------------------------+
+                     |  intent forwarded with no
+                     |  origin / consent verification
+                     v
+               [ relay / network ]
+                     |
+                     v
+           +-----------------------+
+           |  Execution Endpoint   |---&gt; high-impact action on a
+           +-----------------------+     spoofed / unauthorized intent
+
+   (X) = spoofed or unauthorized origin
+</pre>
+</div>
+<figcaption><a href="#figure-2" class="selfRef">Figure 2</a>:
+<a href="#name-scenario-1-spoofed-unauthor" class="selfRef">Scenario 1: spoofed/unauthorized origin attack (X)</a>
+          </figcaption></figure>
+</div>
+<div id="mit-origin">
+<section id="section-4.2.1">
+          <h4 id="name-mitigation-considerations">
+<a href="#section-4.2.1" class="section-number selfRef">4.2.1. </a><a href="#name-mitigation-considerations" class="section-name selfRef">Mitigation Considerations</a>
+          </h4>
+<p id="section-4.2.1-1">
+            Following<a href="#placement" class="auto internal xref">Section 4.1</a>, origin and consent are best evaluated at the earliest admission
+            point, because the relevant signals (which application or agent originated the intent, its
+            execution context, whether the user is present and consenting) are typically only verifiable
+            there; once the intent crosses into the network or a relay, these signals cannot be
+            reconstructed. The admission decision can then be conveyed in an Admission Assertion that the
+            execution endpoint re-verifies before acting (non-bypass, R5).<a href="#section-4.2.1-1" class="pilcrow">¶</a></p>
+<p id="section-4.2.1-2">
+            Admission decisions draw on risk-relevant originator attributes, such as originator identifier,
+            originator class, execution context, attested application/workload state, or locally
+            maintained risk signals, subject to privacy policy. Execution context or user-presence state,
+            where available, such as foreground interaction, unattended execution, delegated background
+            execution, or scheduled automation, can inform the decision. The decision is evaluated against
+            a permission policy expressing which originators may request which services. For high-impact
+            or irreversible actions, explicit user consent is obtained and verified.<a href="#section-4.2.1-2" class="pilcrow">¶</a></p>
+<p id="section-4.2.1-3">
+            A concrete encoding of an Admission Assertion (claims, format) and the associated processing
+            rules are out of scope for this document and are expected to be specified in a companion
+            mechanism document. Candidate building blocks include token formats such as
+            <span>[<a href="#I-D.goswami-agentic-jwt" class="cite xref">I-D.goswami-agentic-jwt</a>]</span> and the agent-to-agent OAuth profile
+            <span>[<a href="#I-D.liu-oauth-a2a-profile" class="cite xref">I-D.liu-oauth-a2a-profile</a>]</span>.<a href="#section-4.2.1-3" class="pilcrow">¶</a></p>
+</section>
+</div>
+</section>
+</div>
+<div id="scn-tamper">
+<section id="section-4.3">
+        <h3 id="name-scenario-2-directive-tamper">
+<a href="#section-4.3" class="section-number selfRef">4.3. </a><a href="#name-scenario-2-directive-tamper" class="section-name selfRef">Scenario 2: Directive Tampering and Authorization Boundary Expansion</a>
+        </h3>
+<span class="break"></span><dl class="dlNewline" id="section-4.3-1">
+          <dt id="section-4.3-1.1">Setting:</dt>
+          <dd style="margin-left: 1.5em" id="section-4.3-1.2">An IBS translates an intent into derived directives (e.g., allowed rules) that traverse
+              multiple intermediaries before reaching an execution endpoint.<a href="#section-4.3-1.2" class="pilcrow">¶</a>
+</dd>
+          <dd class="break"></dd>
+<dt id="section-4.3-1.3">Actors:</dt>
+          <dd style="margin-left: 1.5em" id="section-4.3-1.4">Intent Originator, Intent Client, IBS, one or more intermediaries (agents/clients),
+              Tool/Service Provider.<a href="#section-4.3-1.4" class="pilcrow">¶</a>
+</dd>
+          <dd class="break"></dd>
+<dt id="section-4.3-1.5">Assets:</dt>
+          <dd style="margin-left: 1.5em" id="section-4.3-1.6">Authorization boundary, constraints/invariants, protected resources, audit evidence.<a href="#section-4.3-1.6" class="pilcrow">¶</a>
+</dd>
+          <dd class="break"></dd>
+<dt id="section-4.3-1.7">Attack Sketch:</dt>
+          <dd style="margin-left: 1.5em" id="section-4.3-1.8">
+            <ol start="1" type="1" class="normal type-1" id="section-4.3-1.8.1">
+              <li id="section-4.3-1.8.1.1">A malicious or compromised intermediary node modifies derived directives to add operations or widen resource scope.<a href="#section-4.3-1.8.1.1" class="pilcrow">¶</a>
+</li>
+              <li id="section-4.3-1.8.1.2">The modified directives are forwarded to the execution endpoint without effective detection.<a href="#section-4.3-1.8.1.2" class="pilcrow">¶</a>
+</li>
+              <li id="section-4.3-1.8.1.3">The endpoint performs out-of-bound operations (e.g., modifying account state,
+                  accessing other parties' data, disabling safety rules).<a href="#section-4.3-1.8.1.3" class="pilcrow">¶</a>
+</li>
+            </ol>
+</dd>
+          <dd class="break"></dd>
+<dt id="section-4.3-1.9">Impact:</dt>
+          <dd style="margin-left: 1.5em" id="section-4.3-1.10">Privilege escalation, policy bypass, unauthorized side effects, compliance violations.<a href="#section-4.3-1.10" class="pilcrow">¶</a>
+</dd>
+          <dd class="break"></dd>
+<dt id="section-4.3-1.11">Relevant Requirements:</dt>
+          <dd style="margin-left: 1.5em" id="section-4.3-1.12">R1 (Provenance and Authorization Boundary Binding), R2 (Chain-of-Custody for Derived
+              Directives), R3 (Constraint Validation), R5 (Non-Bypass Enforcement), R6 (Observability
+              and Auditability).<a href="#section-4.3-1.12" class="pilcrow">¶</a>
+</dd>
+        <dd class="break"></dd>
+</dl>
+<p id="section-4.3-2">
+          <a href="#fig-scn2" class="auto internal xref">Figure 3</a> illustrates the attack: a malicious or compromised intermediary node
+          tampers with or widens the directive (marked X), and the change is not detected before the
+          execution endpoint performs an out-of-bound operation. The controls that address this attack
+          are discussed in <a href="#mit-tamper" class="auto internal xref">Section 4.3.1</a>.<a href="#section-4.3-2" class="pilcrow">¶</a></p>
+<span id="name-scenario-2-directive-tamperi"></span><div id="fig-scn2">
+<figure id="figure-3">
+          <div class="alignLeft art-ascii-art art-text artwork" id="section-4.3-3.1">
+<pre>
+ intent
+   |
+   v
++--------+      +----------+      +----------+      +------------+
+|  IBS   |-----&gt;| inter-   |--X--&gt;| inter-   |-----&gt;| Execution  |
+|        |      | mediary  |      | mediary  |      | Endpoint   |
++--------+      +----------+      +----------+      +-----+------+
+                                                         |
+  X = malicious / compromised node tampers with or       v
+      widens the directive; the change is not        out-of-bound
+      detected downstream.                            operation
+</pre>
+</div>
+<figcaption><a href="#figure-3" class="selfRef">Figure 3</a>:
+<a href="#name-scenario-2-directive-tamperi" class="selfRef">Scenario 2: directive tampering attack (X)</a>
+          </figcaption></figure>
+</div>
+<div id="mit-tamper">
+<section id="section-4.3.1">
+          <h4 id="name-mitigation-considerations-2">
+<a href="#section-4.3.1" class="section-number selfRef">4.3.1. </a><a href="#name-mitigation-considerations-2" class="section-name selfRef">Mitigation Considerations</a>
+          </h4>
+<p id="section-4.3.1-1">
+            Because transport security protects the link but not a malicious intermediary node (T1),
+            derived directives are treated as security-relevant artifacts whose integrity and
+            authorization-boundary binding are protected across hops, independently of any hop-by-hop
+            secure channel. At the architectural level, and following the hybrid placement of
+            <a href="#placement" class="auto internal xref">Section 4.1</a>, the relevant control points are:<a href="#section-4.3.1-1" class="pilcrow">¶</a></p>
+<span class="break"></span><dl class="dlParallel" id="section-4.3.1-2">
+            <dt id="section-4.3.1-2.1">Binding and custody (R1, R2):</dt>
+            <dd style="margin-left: 1.5em" id="section-4.3.1-2.2">Derived directives are bound to the intent context and authorization boundary so that
+                unauthorized expansion or substitution is detectable or preventable across hops, with the
+                binding surviving relays end-to-end.<a href="#section-4.3.1-2.2" class="pilcrow">¶</a>
+</dd>
+            <dd class="break"></dd>
+<dt id="section-4.3.1-2.3">Per-boundary verification:</dt>
+            <dd style="margin-left: 1.5em" id="section-4.3.1-2.4">At each trust-boundary crossing, a transforming hop re-validates and may only attenuate
+                (never widen) the authorization boundary before re-binding.<a href="#section-4.3.1-2.4" class="pilcrow">¶</a>
+</dd>
+            <dd class="break"></dd>
+<dt id="section-4.3.1-2.5">Endpoint re-validation (R3, R5):</dt>
+            <dd style="margin-left: 1.5em" id="section-4.3.1-2.6">The execution endpoint re-verifies the binding and re-validates the directives against
+                local constraints as the authoritative, non-bypassable gate, providing defense-in-depth
+                even if upstream validation was bypassed or compromised.<a href="#section-4.3.1-2.6" class="pilcrow">¶</a>
+</dd>
+            <dd class="break"></dd>
+<dt id="section-4.3.1-2.7">Audit evidence (R6):</dt>
+            <dd style="margin-left: 1.5em" id="section-4.3.1-2.8">The system produces evidence linking execution decisions to validated directives and
+                constraints.<a href="#section-4.3.1-2.8" class="pilcrow">¶</a>
+</dd>
+          <dd class="break"></dd>
+</dl>
+<p id="section-4.3.1-3">
+            This addresses T1 (Directive Tampering/Substitution) and T3 (Constraint Bypass). A concrete
+            encoding for the binding and custody evidence (e.g., specific token formats or attenuation
+            mechanisms) is out of scope for this document. Candidate building blocks for carrying
+            authorization context and chain-of-custody across hops include transaction tokens
+            <span>[<a href="#I-D.ietf-oauth-transaction-tokens" class="cite xref">I-D.ietf-oauth-transaction-tokens</a>]</span> and their agent profile
+            <span>[<a href="#I-D.oauth-transaction-tokens-for-agents" class="cite xref">I-D.oauth-transaction-tokens-for-agents</a>]</span>.<a href="#section-4.3.1-3" class="pilcrow">¶</a></p>
+<p id="section-4.3.1-4">
+            The semantic fidelity of an intent degrades along the transformation pipeline (natural-language
+            intent, structured intent, constraints/objectives, derived directives, invocation parameters).
+            Once an intent is reduced to directives, the original meaning may no longer be recoverable from
+            the directive alone. Verifying that a concrete action still falls within the original intent
+            therefore requires a representation of the original intent's constraint envelope to be carried
+            alongside the directives to the point of check. Hops may then be treated by role:<a href="#section-4.3.1-4" class="pilcrow">¶</a></p>
+<span id="name-per-hop-roles-in-a-multi-ho"></span><div id="tab-hops">
+<table class="center" id="table-1">
+            <caption>
+<a href="#table-1" class="selfRef">Table 1</a>:
+<a href="#name-per-hop-roles-in-a-multi-ho" class="selfRef">Per-Hop Roles in a Multi-Hop Chain</a>
+            </caption>
+<thead>
+              <tr>
+                <th class="text-left" rowspan="1" colspan="1">Hop role</th>
+                <th class="text-left" rowspan="1" colspan="1">Action on the intent/directive</th>
+                <th class="text-left" rowspan="1" colspan="1">Semantic-consistency check</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="text-left" rowspan="1" colspan="1">Relay-only (proxy, API relay)</td>
+                <td class="text-left" rowspan="1" colspan="1">Verifies binding/integrity and forwards; is not trusted to preserve intent, so binding is end-to-end.</td>
+                <td class="text-left" rowspan="1" colspan="1">None (does not transform).</td>
+              </tr>
+              <tr>
+                <td class="text-left" rowspan="1" colspan="1">Transforming hop (re-plans/rewrites)</td>
+                <td class="text-left" rowspan="1" colspan="1">Re-validates against constraints; may only attenuate (never widen) the authorization boundary; re-binds with chained custody.</td>
+                <td class="text-left" rowspan="1" colspan="1">Checks the transformed result against the carried intent envelope.</td>
+              </tr>
+              <tr>
+                <td class="text-left" rowspan="1" colspan="1">Execution endpoint (Invocation Gate)</td>
+                <td class="text-left" rowspan="1" colspan="1">Re-verifies binding, re-validates local constraints, enforces non-bypass.</td>
+                <td class="text-left" rowspan="1" colspan="1">Mandatory: checks the concrete invocation against the carried intent envelope.</td>
+              </tr>
+            </tbody>
+          </table>
+</div>
+</section>
+</div>
+</section>
+</div>
+<div id="mapping">
+<section id="section-4.4">
+        <h3 id="name-scenario-to-requirement-map">
+<a href="#section-4.4" class="section-number selfRef">4.4. </a><a href="#name-scenario-to-requirement-map" class="section-name selfRef">Scenario-to-Requirement Mapping</a>
+        </h3>
+<p id="section-4.4-1">
+          <a href="#tab-map" class="auto internal xref">Table 2</a> summarizes the primary mappings between the scenarios and security
+          requirements. These mappings are non-exhaustive; additional requirements may apply depending on
+          deployment context.<a href="#section-4.4-1" class="pilcrow">¶</a></p>
+<span id="name-scenario-to-requirement-mapp"></span><div id="tab-map">
+<table class="center" id="table-2">
+          <caption>
+<a href="#table-2" class="selfRef">Table 2</a>:
+<a href="#name-scenario-to-requirement-mapp" class="selfRef">Scenario to Requirement Mapping</a>
+          </caption>
+<thead>
+            <tr>
+              <th class="text-left" rowspan="1" colspan="1">Scenario</th>
+              <th class="text-left" rowspan="1" colspan="1">Primary Threats</th>
+              <th class="text-left" rowspan="1" colspan="1">Key Requirements</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="text-left" rowspan="1" colspan="1">1 (Spoofed/Non-Consensual Origin)</td>
+              <td class="text-left" rowspan="1" colspan="1">T6, T7</td>
+              <td class="text-left" rowspan="1" colspan="1">R8, R9, R3, R6</td>
+            </tr>
+            <tr>
+              <td class="text-left" rowspan="1" colspan="1">2 (Directive Tampering)</td>
+              <td class="text-left" rowspan="1" colspan="1">T1, T3</td>
+              <td class="text-left" rowspan="1" colspan="1">R1, R2, R3, R5, R6</td>
+            </tr>
+          </tbody>
+        </table>
+</div>
+</section>
+</div>
+</section>
+</div>
+<div id="refmodel">
+<section id="section-5">
+      <h2 id="name-reference-model">
+<a href="#section-5" class="section-number selfRef">5. </a><a href="#name-reference-model" class="section-name selfRef">Reference Model</a>
+      </h2>
+<p id="section-5-1">
+        This section provides a technology-neutral reference model that underpins the scenarios above.
+        It is aligned with intent-based system decomposition commonly used in IBN guidance
+        <span>[<a href="#RFC9315" class="cite xref">RFC9315</a>]</span>, while remaining applicable to non-networking domains. The model is
+        logical: a deployment may collapse functions into fewer components or distribute them across
+        multiple agents and services, and multi-hop chains are formed by composing instances of the
+        model (an intermediary acts as a provider to its predecessor and as a client to its successor).<a href="#section-5-1" class="pilcrow">¶</a></p>
+<span id="name-reference-model-for-multi-h"></span><div id="fig-refmodel">
+<figure id="figure-4">
+        <div class="alignLeft art-ascii-art art-text artwork" id="section-5-2.1">
+<pre>
++------------+             +-----------------------------+
+| User Space |  Intent     | IBS (Intent-Based System)   |
+|            |  Artifact   | Intent Processing Function   |
+|  Intent    |------------&gt;|                             |
+| Originator |             | +-----------+ +-----------+ |
+|            |  Admission  | |  Intent   | | Constraint| |
+|  Intent    |  Assertion  | |Transformer| | Validator |-+-&gt; Policy/
+|  Client    |------------&gt;| +-----------+ +-----------+ |  Constraint
++------------+             |                             |  Authority
+                           | +-----------+               |
+                           | |Invocation |               |
+                           | |   Gate    |---------------+-&gt; Tool/
+                           | +-----------+               |  Service
+                           +-----------------------------+  Provider
+                                  ^           |
+                                  |  Observe  |
+                                  |           v
+                           +-----------------------------+
+                           |   Observer (Monitoring)     |
+                           +-----------------------------+
+</pre>
+</div>
+<figcaption><a href="#figure-4" class="selfRef">Figure 4</a>:
+<a href="#name-reference-model-for-multi-h" class="selfRef">Reference Model for Multi-Hop Intent Processing</a>
+        </figcaption></figure>
+</div>
+<p id="section-5-3">
+        Two distinct flows cross the User Space / IBS boundary: the Intent Artifact (the intent itself)
+        and the Admission Assertion (the verified origin and admission decision, see
+        <a href="#scn-origin" class="auto internal xref">Section 4.2</a>).<a href="#section-5-3" class="pilcrow">¶</a></p>
+<div id="entities">
+<section id="section-5.1">
+        <h3 id="name-reference-model-entities">
+<a href="#section-5.1" class="section-number selfRef">5.1. </a><a href="#name-reference-model-entities" class="section-name selfRef">Reference Model Entities</a>
+        </h3>
+<span class="break"></span><dl class="dlParallel" id="section-5.1-1">
+          <dt id="section-5.1-1.1">Intent Originator:</dt>
+          <dd style="margin-left: 1.5em" id="section-5.1-1.2">The party whose goals and constraints are to be satisfied (e.g., human user,
+              application owner, operator, or delegated principal).<a href="#section-5.1-1.2" class="pilcrow">¶</a>
+</dd>
+          <dd class="break"></dd>
+<dt id="section-5.1-1.3">Intent Client:</dt>
+          <dd style="margin-left: 1.5em" id="section-5.1-1.4">The component that submits intents to an IBS and may carry contextual signals.
+              The Intent Client (or an equivalent admission point) may also enforce origin authentication and
+              originator-level admission control before an intent is forwarded (see R8 and R9).<a href="#section-5.1-1.4" class="pilcrow">¶</a>
+</dd>
+          <dd class="break"></dd>
+<dt id="section-5.1-1.5">Intent Processing Function:</dt>
+          <dd style="margin-left: 1.5em" id="section-5.1-1.6">A logical function that performs translation, validation, and orchestration
+              for intent fulfillment. This function encompasses the Intent Transformer,
+              Constraint Validator, and Invocation Gate.<a href="#section-5.1-1.6" class="pilcrow">¶</a>
+</dd>
+          <dd class="break"></dd>
+<dt id="section-5.1-1.7">Intent Transformer:</dt>
+          <dd style="margin-left: 1.5em" id="section-5.1-1.8">A function that transforms intent representations (e.g., natural language to
+              structured intent, structured intent to constraints/objectives, objectives to
+              derived directives).<a href="#section-5.1-1.8" class="pilcrow">¶</a>
+</dd>
+          <dd class="break"></dd>
+<dt id="section-5.1-1.9">Constraint Validator:</dt>
+          <dd style="margin-left: 1.5em" id="section-5.1-1.10">A function that enforces R3 by validating intents and derived artifacts against
+              constraints, invariants, policy rules, and safety boundaries.<a href="#section-5.1-1.10" class="pilcrow">¶</a>
+</dd>
+          <dd class="break"></dd>
+<dt id="section-5.1-1.11">Invocation Gate:</dt>
+          <dd style="margin-left: 1.5em" id="section-5.1-1.12">A function that enforces R4 and R5 by privilege-checking and constraint-checking
+              each tool/service invocation and preventing bypass of required checks.<a href="#section-5.1-1.12" class="pilcrow">¶</a>
+</dd>
+          <dd class="break"></dd>
+<dt id="section-5.1-1.13">Policy/Constraint Authority:</dt>
+          <dd style="margin-left: 1.5em" id="section-5.1-1.14">A logical source of constraints and policy boundaries (e.g., organizational policy,
+              compliance rules, safety invariants, subscription/contract limits). It also supplies the
+              permission policy that determines which originators may request which services (R9).<a href="#section-5.1-1.14" class="pilcrow">¶</a>
+</dd>
+          <dd class="break"></dd>
+<dt id="section-5.1-1.15">Tool/Service Provider:</dt>
+          <dd style="margin-left: 1.5em" id="section-5.1-1.16">A system that executes actions (APIs, workflows, actuators, management functions,
+              data services).<a href="#section-5.1-1.16" class="pilcrow">¶</a>
+</dd>
+          <dd class="break"></dd>
+<dt id="section-5.1-1.17">Observer (Monitoring Function):</dt>
+          <dd style="margin-left: 1.5em" id="section-5.1-1.18">A function that collects observations (telemetry, events, measurements)
+              used for assurance, compliance assessment, and drift detection (R6 and R7).<a href="#section-5.1-1.18" class="pilcrow">¶</a>
+</dd>
+        <dd class="break"></dd>
+</dl>
+</section>
+</div>
+<div id="overview">
+<section id="section-5.2">
+        <h3 id="name-operational-overview">
+<a href="#section-5.2" class="section-number selfRef">5.2. </a><a href="#name-operational-overview" class="section-name selfRef">Operational Overview</a>
+        </h3>
+<p id="section-5.2-1">
+          The following informative lifecycle contextualizes admission control, constraint validation,
+          invocation validation, observation, and drift handling.<a href="#section-5.2-1" class="pilcrow">¶</a></p>
+<ol start="1" type="1" class="normal type-1" id="section-5.2-2">
+          <li id="section-5.2-2.1">The Intent Originator expresses an intent via the Intent Client.<a href="#section-5.2-2.1" class="pilcrow">¶</a>
+</li>
+          <li id="section-5.2-2.2">The Intent Client (or an equivalent admission point) authenticates the origin and applies
+              admission control (R8, R9) before forwarding.<a href="#section-5.2-2.2" class="pilcrow">¶</a>
+</li>
+          <li id="section-5.2-2.3">The Intent Client submits an admitted intent artifact to the IBS.<a href="#section-5.2-2.3" class="pilcrow">¶</a>
+</li>
+          <li id="section-5.2-2.4">The IBS performs intent translation (Intent Transformer) to derive constraints,
+              objectives, and candidate directives.<a href="#section-5.2-2.4" class="pilcrow">¶</a>
+</li>
+          <li id="section-5.2-2.5">The IBS performs constraint validation (R3) in consultation with the
+              Policy/Constraint Authority.<a href="#section-5.2-2.5" class="pilcrow">¶</a>
+</li>
+          <li id="section-5.2-2.6">Prior to each invocation, the IBS performs invocation validation (R4), including
+              privilege checks and parameter/constraint checks.<a href="#section-5.2-2.6" class="pilcrow">¶</a>
+</li>
+          <li id="section-5.2-2.7">The Tool/Service Provider executes the invocation and returns results; side effects
+              may be irreversible.<a href="#section-5.2-2.7" class="pilcrow">¶</a>
+</li>
+          <li id="section-5.2-2.8">The Observer produces observations used by the IBS for assurance and drift detection (R6).<a href="#section-5.2-2.8" class="pilcrow">¶</a>
+</li>
+          <li id="section-5.2-2.9">If drift or violations are detected, the IBS applies a policy-driven response (R7),
+              such as deny, degrade, re-confirm, re-negotiate, or fallback.<a href="#section-5.2-2.9" class="pilcrow">¶</a>
+</li>
+        </ol>
+</section>
+</div>
+</section>
+</div>
+<div id="seccons">
+<section id="section-6">
+      <h2 id="name-security-and-privacy-consid">
+<a href="#section-6" class="section-number selfRef">6. </a><a href="#name-security-and-privacy-consid" class="section-name selfRef">Security and Privacy Considerations</a>
+      </h2>
+<p id="section-6-1">
+        Beyond the scenario-specific considerations, the following general principles apply to
+        intent-based systems:<a href="#section-6-1" class="pilcrow">¶</a></p>
+<ul class="normal">
+<li class="normal" id="section-6-2.1">Trust Boundary Awareness: systems explicitly identify trust boundaries and
+            apply appropriate security controls at each boundary crossing.<a href="#section-6-2.1" class="pilcrow">¶</a>
+</li>
+        <li class="normal" id="section-6-2.2">Defense in Depth: validation occurs at multiple layers (admission, translation, propagation,
+            invocation, execution) to provide resilience against bypass or compromise of individual
+            layers.<a href="#section-6-2.2" class="pilcrow">¶</a>
+</li>
+        <li class="normal" id="section-6-2.3">Least Privilege: derived directives and invocations are scoped to the minimum
+            privileges necessary for intent fulfillment.<a href="#section-6-2.3" class="pilcrow">¶</a>
+</li>
+        <li class="normal" id="section-6-2.4">Fail-Safe Defaults: when validation fails or drift is detected, systems default
+            to denying actions rather than permitting potentially unsafe operations.<a href="#section-6-2.4" class="pilcrow">¶</a>
+</li>
+        <li class="normal" id="section-6-2.5">Auditability: all security-relevant decisions and events are logged with
+            sufficient context to support post-incident investigation and compliance assessment.<a href="#section-6-2.5" class="pilcrow">¶</a>
+</li>
+        <li class="normal" id="section-6-2.6">Privacy of Admission Signals: admission assertions should avoid exposing raw local state or
+            behavioral history to downstream entities; coarse-grained decisions or policy references are
+            preferred over detailed originator profiles. Risk-relevant attributes are minimized and
+            subject to privacy policy.<a href="#section-6-2.6" class="pilcrow">¶</a>
+</li>
+      </ul>
+</section>
+</div>
+<div id="iana">
+<section id="section-7">
+      <h2 id="name-iana-considerations">
+<a href="#section-7" class="section-number selfRef">7. </a><a href="#name-iana-considerations" class="section-name selfRef">IANA Considerations</a>
+      </h2>
+<p id="section-7-1">
+        This document has no IANA actions. It does not define any message format, claim, or registry;
+        concrete admission and binding mechanisms, and any associated registrations, are out of scope and
+        would be specified in companion documents.<a href="#section-7-1" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="refs-normative">
+<section id="section-8">
+      <h2 id="name-normative-references">
+<a href="#section-8" class="section-number selfRef">8. </a><a href="#name-normative-references" class="section-name selfRef">Normative References</a>
+      </h2>
+<dl class="references">
+<dt id="RFC2119">[RFC2119]</dt>
+      <dd>
+<span class="refAuthor">Bradner, S.</span>, <span class="refTitle">"Key words for use in RFCs to Indicate Requirement Levels"</span>, <span class="seriesInfo">BCP 14</span>, <span class="seriesInfo">RFC 2119</span>, <span class="seriesInfo">DOI 10.17487/RFC2119</span>, <time datetime="1997-03" class="refDate">March 1997</time>, <span>&lt;<a href="https://www.rfc-editor.org/info/rfc2119">https://www.rfc-editor.org/info/rfc2119</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+<dt id="RFC8174">[RFC8174]</dt>
+    <dd>
+<span class="refAuthor">Leiba, B.</span>, <span class="refTitle">"Ambiguity of Uppercase vs Lowercase in RFC 2119 Key Words"</span>, <span class="seriesInfo">BCP 14</span>, <span class="seriesInfo">RFC 8174</span>, <span class="seriesInfo">DOI 10.17487/RFC8174</span>, <time datetime="2017-05" class="refDate">May 2017</time>, <span>&lt;<a href="https://www.rfc-editor.org/info/rfc8174">https://www.rfc-editor.org/info/rfc8174</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+</dl>
+</section>
+</div>
+<div id="refs-informative">
+<section id="section-9">
+      <h2 id="name-informative-references">
+<a href="#section-9" class="section-number selfRef">9. </a><a href="#name-informative-references" class="section-name selfRef">Informative References</a>
+      </h2>
+<dl class="references">
+<dt id="I-D.goswami-agentic-jwt">[I-D.goswami-agentic-jwt]</dt>
+      <dd>
+<span class="refAuthor">Goswami, A.</span>, <span class="refTitle">"Secure Intent Protocol: JWT Compatible Agentic Identity and Workflow Management"</span>, <span class="refContent">Work in Progress</span>, <span class="seriesInfo">Internet-Draft, draft-goswami-agentic-jwt-00</span>, <time datetime="2026-01-01" class="refDate">1 January 2026</time>, <span>&lt;<a href="https://datatracker.ietf.org/doc/html/draft-goswami-agentic-jwt-00">https://datatracker.ietf.org/doc/html/draft-goswami-agentic-jwt-00</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+<dt id="I-D.ietf-oauth-transaction-tokens">[I-D.ietf-oauth-transaction-tokens]</dt>
+      <dd>
+<span class="refAuthor">Tulshibagwale, A.</span>, <span class="refAuthor">Fletcher, G.</span>, and <span class="refAuthor">P. Kasselman</span>, <span class="refTitle">"Transaction Tokens"</span>, <span class="refContent">Work in Progress</span>, <span class="seriesInfo">Internet-Draft, draft-ietf-oauth-transaction-tokens-08</span>, <time datetime="2026-03-02" class="refDate">2 March 2026</time>, <span>&lt;<a href="https://datatracker.ietf.org/doc/html/draft-ietf-oauth-transaction-tokens-08">https://datatracker.ietf.org/doc/html/draft-ietf-oauth-transaction-tokens-08</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+<dt id="I-D.irtf-nmrg-ibn-usecases">[I-D.irtf-nmrg-ibn-usecases]</dt>
+      <dd>
+<span class="refAuthor">Yao, K.</span>, <span class="refAuthor">Chen, D.</span>, <span class="refAuthor">Jeong, J. P.</span>, <span class="refAuthor">Wu, Q.</span>, <span class="refAuthor">Yang, C.</span>, <span class="refAuthor">Contreras, L. M.</span>, and <span class="refAuthor">G. Fioccola</span>, <span class="refTitle">"Use Cases and Practices for Intent-Based Networking"</span>, <span class="refContent">Work in Progress</span>, <span class="seriesInfo">Internet-Draft, draft-irtf-nmrg-ibn-usecases-03</span>, <time datetime="2026-03-15" class="refDate">15 March 2026</time>, <span>&lt;<a href="https://datatracker.ietf.org/doc/html/draft-irtf-nmrg-ibn-usecases-03">https://datatracker.ietf.org/doc/html/draft-irtf-nmrg-ibn-usecases-03</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+<dt id="I-D.liu-oauth-a2a-profile">[I-D.liu-oauth-a2a-profile]</dt>
+      <dd>
+<span class="refAuthor">Liu, P. C.</span> and <span class="refAuthor">N. Yuan</span>, <span class="refTitle">"Agent-to-Agent (A2A) Profile for OAuth Transaction Tokens"</span>, <span class="refContent">Work in Progress</span>, <span class="seriesInfo">Internet-Draft, draft-liu-oauth-a2a-profile-00</span>, <time datetime="2025-10-20" class="refDate">20 October 2025</time>, <span>&lt;<a href="https://datatracker.ietf.org/doc/html/draft-liu-oauth-a2a-profile-00">https://datatracker.ietf.org/doc/html/draft-liu-oauth-a2a-profile-00</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+<dt id="I-D.ni-a2a-ai-agent-security-requirements">[I-D.ni-a2a-ai-agent-security-requirements]</dt>
+      <dd>
+<span class="refAuthor">Yuan, N.</span>, <span class="refAuthor">Liu, P. C.</span>, <span class="refAuthor">Gao, Q.</span>, and <span class="refAuthor">Z. Li</span>, <span class="refTitle">"Security Requirements for AI Agents"</span>, <span class="refContent">Work in Progress</span>, <span class="seriesInfo">Internet-Draft, draft-ni-a2a-ai-agent-security-requirements-01</span>, <time datetime="2026-02-28" class="refDate">28 February 2026</time>, <span>&lt;<a href="https://datatracker.ietf.org/doc/html/draft-ni-a2a-ai-agent-security-requirements-01">https://datatracker.ietf.org/doc/html/draft-ni-a2a-ai-agent-security-requirements-01</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+<dt id="I-D.oauth-transaction-tokens-for-agents">[I-D.oauth-transaction-tokens-for-agents]</dt>
+      <dd>
+<span class="refAuthor">Raut, A.</span>, <span class="refTitle">"Transaction Tokens For Agents"</span>, <span class="refContent">Work in Progress</span>, <span class="seriesInfo">Internet-Draft, draft-oauth-transaction-tokens-for-agents-06</span>, <time datetime="2026-04-11" class="refDate">11 April 2026</time>, <span>&lt;<a href="https://datatracker.ietf.org/doc/html/draft-oauth-transaction-tokens-for-agents-06">https://datatracker.ietf.org/doc/html/draft-oauth-transaction-tokens-for-agents-06</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+<dt id="MS-AF-SEQ">[MS-AF-SEQ]</dt>
+      <dd>
+<span class="refAuthor">Microsoft</span>, <span class="refTitle">"Sequential Orchestration, Microsoft Agent Framework Workflows"</span>, <span class="refContent">Microsoft, cited as an illustrative example only</span>, <time datetime="2026" class="refDate">2026</time>, <span>&lt;<a href="https://github.com/microsoft/agent-framework">https://github.com/microsoft/agent-framework</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+<dt id="OTEL-GENAI">[OTEL-GENAI]</dt>
+      <dd>
+<span class="refAuthor">OpenTelemetry Authors</span>, <span class="refTitle">"Semantic Conventions for Generative AI (GenAI)"</span>, <span class="refContent">OpenTelemetry, work in progress (experimental)</span>, <time datetime="2026" class="refDate">2026</time>, <span>&lt;<a href="https://github.com/open-telemetry/semantic-conventions-genai">https://github.com/open-telemetry/semantic-conventions-genai</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+<dt id="RFC9315">[RFC9315]</dt>
+      <dd>
+<span class="refAuthor">Clemm, A.</span>, <span class="refAuthor">Ciavaglia, L.</span>, <span class="refAuthor">Granville, L. Z.</span>, and <span class="refAuthor">J. Tantsura</span>, <span class="refTitle">"Intent-Based Networking - Concepts and Definitions"</span>, <span class="seriesInfo">RFC 9315</span>, <span class="seriesInfo">DOI 10.17487/RFC9315</span>, <time datetime="2022-10" class="refDate">October 2022</time>, <span>&lt;<a href="https://www.rfc-editor.org/info/rfc9315">https://www.rfc-editor.org/info/rfc9315</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+<dt id="RFC9316">[RFC9316]</dt>
+    <dd>
+<span class="refAuthor">Li, C.</span>, <span class="refAuthor">Havel, O.</span>, <span class="refAuthor">Olariu, A.</span>, <span class="refAuthor">Martinez-Julia, P.</span>, <span class="refAuthor">Nobre, J.</span>, and <span class="refAuthor">D. Lopez</span>, <span class="refTitle">"Intent Classification"</span>, <span class="seriesInfo">RFC 9316</span>, <span class="seriesInfo">DOI 10.17487/RFC9316</span>, <time datetime="2022-10" class="refDate">October 2022</time>, <span>&lt;<a href="https://www.rfc-editor.org/info/rfc9316">https://www.rfc-editor.org/info/rfc9316</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+</dl>
+</section>
+</div>
+<div id="acknowledgments">
+<section id="appendix-A">
+      <h2 id="name-acknowledgments">
+<a href="#name-acknowledgments" class="section-name selfRef">Acknowledgments</a>
+      </h2>
+<p id="appendix-A-1">
+      The authors thank Adam Lin (Agent Threat Rules) for implementer feedback on the observability
+      and drift-detection requirements (<a href="#requirements" class="auto internal xref">Section 3.3</a>), in particular the observations
+      that audit evidence benefits from a shared, interoperable trace schema and that an absent expected
+      control is a detection shape distinct from a violated constraint.<a href="#appendix-A-1" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="authors-addresses">
+<section id="appendix-B">
+      <h2 id="name-authors-addresses">
+<a href="#name-authors-addresses" class="section-name selfRef">Authors' Addresses</a>
+      </h2>
+<address class="vcard">
+        <div dir="auto" class="left"><span class="fn nameRole">Yuning Jiang</span></div>
+<div dir="auto" class="left"><span class="org">Huawei</span></div>
+<div class="email">
+<span>Email:</span>
+<a href="mailto:jiangyuning2@h-partners.com" class="email">jiangyuning2@h-partners.com</a>
+</div>
+</address>
+<address class="vcard">
+        <div dir="auto" class="left"><span class="fn nameRole">Lun Li</span></div>
+<div dir="auto" class="left"><span class="org">Huawei</span></div>
+<div class="email">
+<span>Email:</span>
+<a href="mailto:lilun20@huawei.com" class="email">lilun20@huawei.com</a>
+</div>
+</address>
+<address class="vcard">
+        <div dir="auto" class="left"><span class="fn nameRole">Yurong Song</span></div>
+<div dir="auto" class="left"><span class="org">Huawei</span></div>
+<div class="email">
+<span>Email:</span>
+<a href="mailto:songyurong1@huawei.com" class="email">songyurong1@huawei.com</a>
+</div>
+</address>
+<address class="vcard">
+        <div dir="auto" class="left"><span class="fn nameRole">Faye Liu</span></div>
+<div dir="auto" class="left"><span class="org">Huawei</span></div>
+<div class="email">
+<span>Email:</span>
+<a href="mailto:liufei19@huawei.com" class="email">liufei19@huawei.com</a>
+</div>
+</address>
+</section>
+</div>
+<script>const toc = document.getElementById("toc");
+toc.querySelector("h2").addEventListener("click", e => {
+  toc.classList.toggle("active");
+});
+toc.querySelector("nav").addEventListener("click", e => {
+  toc.classList.remove("active");
+});
+</script>
+</body>
+</html>
