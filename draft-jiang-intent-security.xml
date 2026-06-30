@@ -448,24 +448,24 @@
 
       <section anchor="scn-origin" numbered="true" toc="default">
         <name>Scenario 1: Spoofed Origin and Non-Consensual Intent Origination</name>
- 
+
         <dl newline="true" spacing="normal">
           <dt>Setting:</dt>
           <dd>A user-facing device (e.g., a terminal) hosts multiple applications and agents. Any of them
               can express intents that are submitted to a local Intent Client and forwarded to a remote
               Intent-Based System (IBS) that accepts intent artifacts and may trigger high-impact services
               or actions. The remote receiver acts on whichever intents it admits.</dd>
- 
+
           <dt>Actors:</dt>
           <dd>Intent Originator (the user or a legitimate originator), a legitimate local agent, a
               malicious co-resident application/agent, the Intent Client, and the remote IBS /
               Tool/Service Provider.</dd>
- 
+
           <dt>Assets:</dt>
           <dd>Originator identity and account/identity bindings, user consent, the permission policy that
               determines which originators may request which services, billing/spending limits, and safety
               constraints.</dd>
- 
+
           <dt>Attack Sketch:</dt>
           <dd>
             <ol spacing="normal" type="1">
@@ -479,22 +479,22 @@
                   the originator's execution context, or valid user consent.</li>
             </ol>
           </dd>
- 
+
           <dt>Impact:</dt>
           <dd>Unauthorized actions, fraud, privacy leakage, billing abuse, and irreversible side effects.</dd>
- 
+
           <dt>Relevant Requirements:</dt>
           <dd>R8 (Origin Authentication), R9 (Originator Authorization and Consent-Gated Admission),
               R3 (Constraint Validation), R6 (Observability and Auditability).</dd>
         </dl>
- 
+
         <t>
           <xref target="fig-scn1"/> illustrates the attack: a spoofed or unauthorized origin (marked X)
           among co-resident applications on a user-facing device, whose intent is forwarded without
           origin or consent verification and is acted upon at the execution endpoint. The controls that
           address this attack are discussed in <xref target="mit-origin"/>.
         </t>
- 
+
         <figure anchor="fig-scn1">
           <name>Scenario 1: spoofed/unauthorized origin attack (X)</name>
           <artwork type="ascii-art" align="left"><![CDATA[
@@ -517,11 +517,11 @@
            +-----------------------+
            |  Execution Endpoint   |---> high-impact action on a
            +-----------------------+     spoofed / unauthorized intent
- 
+
    (X) = spoofed or unauthorized origin
 ]]></artwork>
         </figure>
- 
+
         <section anchor="mit-origin" numbered="true" toc="default">
           <name>Mitigation Considerations</name>
           <t>
@@ -550,22 +550,22 @@
           </t>
         </section>
       </section>
- 
+
       <section anchor="scn-tamper" numbered="true" toc="default">
         <name>Scenario 2: Directive Tampering and Authorization Boundary Expansion</name>
- 
+
         <dl newline="true" spacing="normal">
           <dt>Setting:</dt>
           <dd>An IBS translates an intent into derived directives (e.g., allowed rules) that traverse
               multiple intermediaries before reaching an execution endpoint.</dd>
- 
+
           <dt>Actors:</dt>
           <dd>Intent Originator, Intent Client, IBS, one or more intermediaries (agents/clients),
               Tool/Service Provider.</dd>
- 
+
           <dt>Assets:</dt>
           <dd>Authorization boundary, constraints/invariants, protected resources, audit evidence.</dd>
- 
+
           <dt>Attack Sketch:</dt>
           <dd>
             <ol spacing="normal" type="1">
@@ -575,23 +575,23 @@
                   accessing other parties' data, disabling safety rules).</li>
             </ol>
           </dd>
- 
+
           <dt>Impact:</dt>
           <dd>Privilege escalation, policy bypass, unauthorized side effects, compliance violations.</dd>
- 
+
           <dt>Relevant Requirements:</dt>
           <dd>R1 (Provenance and Authorization Boundary Binding), R2 (Chain-of-Custody for Derived
               Directives), R3 (Constraint Validation), R5 (Non-Bypass Enforcement), R6 (Observability
               and Auditability).</dd>
         </dl>
- 
+
         <t>
           <xref target="fig-scn2"/> illustrates the attack: a malicious or compromised intermediary node
           tampers with or widens the directive (marked X), and the change is not detected before the
           execution endpoint performs an out-of-bound operation. The controls that address this attack
           are discussed in <xref target="mit-tamper"/>.
         </t>
- 
+
         <figure anchor="fig-scn2">
           <name>Scenario 2: directive tampering attack (X)</name>
           <artwork type="ascii-art" align="left"><![CDATA[
@@ -608,7 +608,7 @@
       detected downstream.                            operation
 ]]></artwork>
         </figure>
- 
+
         <section anchor="mit-tamper" numbered="true" toc="default">
           <name>Mitigation Considerations</name>
           <t>
@@ -679,7 +679,7 @@
           </table>
         </section>
       </section>
- 
+
 
       <section anchor="mapping" numbered="true" toc="default">
         <name>Scenario-to-Requirement Mapping</name>
