@@ -1,0 +1,3 @@
+# Normalize line endings to LF in the repository for all text files.
+# xml2rfc / kramdown-rfc lint (i-d-template) rejects CRLF as trailing whitespace.
+* text=auto eol=lf
