@@ -4,16 +4,16 @@
 
 This is the working area for the individual Internet-Draft, "Security Considerations and Requirements for Intent-Based Requests in Agentic Systems".
 
-* [Editor's Copies](https://agent-security-labs.github.io/intent-security/)
+* [Editor's Copies](https://agent-security-labs.github.io/intent-security-draft/)
 * [Datatracker Page](https://datatracker.ietf.org/doc/draft-jiang-intent-security)
 * [Individual Draft](https://datatracker.ietf.org/doc/html/draft-jiang-intent-security)
-* [Compare Editor's Copy to Individual Draft](https://agent-security-labs.github.io/intent-security/#go.draft-jiang-intent-security.diff)
+* [Compare Editor's Copy to Individual Draft](https://agent-security-labs.github.io/intent-security-draft/#go.draft-jiang-intent-security.diff)
 
 
 ## Contributing
 
 See the
-[guidelines for contributions](https://github.com/agent-security-labs/intent-security/blob/main/CONTRIBUTING.md).
+[guidelines for contributions](https://github.com/agent-security-labs/intent-security-draft/blob/main/CONTRIBUTING.md).
 
 The contributing file also has tips on how to make contributions, if you
 don't already know how to do that.
