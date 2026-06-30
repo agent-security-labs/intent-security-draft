@@ -1,54 +1,80 @@
-name: GitHub Pages (Editor's Copy)
+name: "Update Editor's Copy"
 
 on:
   push:
-    branches: [ "master", "main" ]
-  workflow_dispatch:
-
-permissions:
-  contents: read
-  pages: write
-  id-token: write
+    paths-ignore:
+    - README.md
+    - CONTRIBUTING.md
+    - LICENSE.md
+    - .gitignore
+  pull_request:
+    paths-ignore:
+    - README.md
+    - CONTRIBUTING.md
+    - LICENSE.md
+    - .gitignore
 
 jobs:
   build:
+    name: "Update Editor's Copy"
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+    - name: "Checkout"
+      uses: actions/checkout@v6
 
-      - name: Set up Ruby
-        uses: ruby/setup-ruby@v1
-        with:
-          ruby-version: "3.2"
+    - name: "Setup"
+      id: setup
+      run: date -u "+date=%FT%T" >>"$GITHUB_OUTPUT"
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
+    - name: "Caching"
+      uses: actions/cache@v5
+      with:
+        path: |
+          .refcache
+          .venv
+          .gems
+          node_modules
+          .targets.mk
+        key: i-d-${{ steps.setup.outputs.date }}
+        restore-keys: i-d-
 
-      - name: Install build tools
-        run: |
-          gem install kramdown-rfc
-          python -m pip install --upgrade pip
-          python -m pip install --upgrade xml2rfc
+    - name: "Build Drafts"
+      id: build
+      uses: martinthomson/i-d-template@v1
+      with:
+        token: ${{ github.token }}
 
-      - name: Build Editor's Copy
-        run: make all
+    - name: "Fix Lints"
+      id: fix-lint
+      if: always() && steps.build.outcome == 'failure'
+      uses: martinthomson/i-d-template@v1
+      with:
+        make: fix-lint
 
-      - name: Configure Pages
-        uses: actions/configure-pages@v5
+    - name: "Propose Linting Fixes"
+      if: >
+        always() &&
+        steps.fix-lint.outcome != 'skipped' &&
+        github.event.pull_request &&
+        github.event.pull_request.head.repo.full_name == github.repository
+      uses: parkerbxyz/suggest-changes@v3
+      with:
+        token: ${{ github.token }}
 
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: build/
+    - name: "Update GitHub Pages"
+      uses: martinthomson/i-d-template@v1
+      if: ${{ github.event_name == 'push' }}
+      with:
+        make: gh-pages
+        token: ${{ github.token }}
 
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-    steps:
-      - name: Deploy to GitHub Pages
-        uses: actions/deploy-pages@v4
+    - name: "Archive Built Drafts"
+      uses: actions/upload-artifact@v6
+      with:
+        name: drafts
+        path: |
+          draft-*.html
+          draft-*.txt
