@@ -20,3 +20,6 @@ archive.json
 package-lock.json
 report.xml
 !requirements.txt
+
+# Local tooling artifact (not part of the draft)
+tracker.log
